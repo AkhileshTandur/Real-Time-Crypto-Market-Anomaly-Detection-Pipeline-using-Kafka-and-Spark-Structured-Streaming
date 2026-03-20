@@ -1,0 +1,11 @@
+# Crypto Project - Binance Data Collection Config
+symbols:
+  - btcusdt
+  - ethusdt
+
+collect_duration_seconds: 120
+
+# Raw data output
+data:
+  raw_dir: data/raw
+  cleaned_dir: data/cleaned

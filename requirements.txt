@@ -1,0 +1,5 @@
+websockets>=12.0
+pandas>=2.0
+matplotlib>=3.7
+pyyaml>=6.0
+kafka-python>=2.0.2
