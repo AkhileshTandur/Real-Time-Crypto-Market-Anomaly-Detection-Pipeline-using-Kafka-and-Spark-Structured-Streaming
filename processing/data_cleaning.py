@@ -16,14 +16,7 @@ CLEANED_DIR = PROJECT_ROOT / "data" / "cleaned"
 CLEANED_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def load_raw_data(raw_file: Path = None) -> pd.DataFrame:
-    """Load raw trade data from JSON file (one JSON object per line)."""
-    if raw_file is None:
-        # Use most recent file if none specified
-        files = list(RAW_DIR.glob("trades_*.json"))
-        if not files:
-            raise FileNotFoundError(f"No raw data in {RAW_DIR}. Run binance_collector.py first.")
-        raw_file = max(files, key=lambda f: f.stat().st_mtime)
+
 
     print(f"Loading: {raw_file}")
     records = []
