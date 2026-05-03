@@ -5,10 +5,10 @@
 | Component | Role |
 | --- | --- |
 | Binance WebSocket collector | Captures live trade events and writes JSONL files |
-| Historical replay producer | Streams stored JSONL files into Kafka for repeatable demos |
+| Historical replay producer | Streams stored JSONL files into Kafka for repeatable runs |
 | Kafka | Buffers high-velocity trade events and decouples producers from Spark |
 | Spark Structured Streaming | Parses, cleans, windows, aggregates, and flags anomalies |
-| EDA scripts | Convert cleaned and streaming outputs into presentation charts |
+| EDA scripts | Convert cleaned and streaming outputs into charts |
 | Batch anomaly scorer | Validates anomaly behavior with rolling symbol-specific baselines |
 
 ## Data Contract

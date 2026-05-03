@@ -1,241 +1,181 @@
-# Real-Time Crypto Market Anomaly Detection Pipeline
+# Real-Time Crypto Market Anomaly Detection
 
-Production-style Big Data pipeline for collecting Binance crypto trades, streaming them through Kafka, processing them with Spark Structured Streaming, and detecting unusual market behavior in near real time.
+This project streams crypto trade data through Kafka, processes it with Spark Structured Streaming, and flags unusual market activity using short-window price, volume, and trade-count signals.
 
-The project is built around the **Velocity** Big Data requirement: crypto trades arrive continuously at high speed and need streaming ingestion, cleaning, aggregation, and anomaly detection instead of only static batch analysis.
+The pipeline is designed around live market data. Binance trade events arrive continuously, Kafka buffers the event stream, and Spark turns raw ticks into cleaned aggregates that can be monitored or analyzed later.
 
-## Project Goal
+## What It Does
 
-Detect abnormal crypto market activity from live or replayed Binance trade data. The pipeline focuses on:
-
-- rapid price movement inside short time windows,
-- unusually large notional trades,
-- spikes in trade frequency,
-- cleaned historical outputs for EDA and model tuning.
-
-## Dataset Selection and Motivation
-
-**Dataset:** Binance public trade stream for liquid crypto pairs such as `BTCUSDT` and `ETHUSDT`.
-
-**Why this is a Big Data problem:** This project satisfies **Velocity**. Market trades are generated continuously and require near real-time ingestion and processing. A static CSV-only workflow would miss the operational problem: identifying unusual behavior while data is still arriving.
-
-**Connection to goal:** Each trade contains symbol, price, quantity, trade ID, and event time. These fields directly support market surveillance features such as price spread, notional volume, trade count, and anomaly windows.
+- collects Binance trade events for pairs such as `BTCUSDT` and `ETHUSDT`
+- replays stored JSONL trade files into Kafka for repeatable runs
+- parses and cleans trade events in Spark
+- computes per-symbol time-window metrics
+- flags suspicious windows based on price spread, large trades, and traffic spikes
+- generates offline EDA charts and anomaly-score files
 
 ## Architecture
 
 ```text
-Binance WebSocket / historical JSONL
+Binance WebSocket / JSONL replay
         |
         v
 Kafka topic: binance.trades
         |
         v
 Spark Structured Streaming
-  - JSON parsing
-  - schema normalization
-  - null and invalid-value filtering
-  - event-time watermarking
-  - 1-minute window aggregation
-  - anomaly flagging
         |
         v
-data/stream/aggregates_csv
+Windowed market metrics + anomaly flags
         |
         v
-EDA plots + anomaly reports
+Charts, logs, and downstream analysis
 ```
 
-## Repository Structure
+## Repository Layout
 
 ```text
 producer/
   binance_collector.py                 Live Binance WebSocket collector
-  generate_sample_data.py              Offline realistic sample generator
+  generate_sample_data.py              Local Binance-style data generator
+
 streaming/
-  replay_binance_trades_to_kafka.py    Historical/live JSONL replay into Kafka
+  replay_binance_trades_to_kafka.py    JSONL-to-Kafka replay producer
   spark_stream_kafka_binance_clean_aggregate.py
+
 processing/
-  data_cleaning.py                     Batch cleaning for EDA
+  data_cleaning.py                     Batch cleaning
   anomaly_detection.py                 Offline rolling z-score anomaly scoring
+
 eda/
-  eda_analysis.py                      EDA from cleaned trade files
-  eda_from_stream_aggregates.py        EDA from Spark streaming aggregates
-data/
-  raw/                                 Raw Binance JSONL trades
-  cleaned/                             Cleaned CSV files
-  stream/                              Spark streaming output, ignored by git
-output/                                Generated visualizations
-docker-compose.yml                     Local Kafka broker
-config.yaml                            Symbols and collection settings
+  eda_analysis.py                      Charts from cleaned trade files
+  eda_from_stream_aggregates.py        Charts from Spark aggregate output
+
+dashboard/
+  index.html                           Browser-based workflow visualizer
+
+docs/
+  architecture.md                      Data contract and component overview
+  runbook.md                           Runtime checklist
+  ui_walkthrough.md                    UI guide for Kafka, Spark, and Docker
 ```
 
-## Environment Setup
+## Requirements
+
+- Docker Desktop
+- Python 3.10+
+- Java 17 if running Spark outside Docker
 
 Install Python dependencies:
 
-```bash
+```powershell
 py -m pip install -r requirements.txt
 ```
 
-Start Kafka locally:
+## Run With Docker
 
-```bash
+Start Kafka, Redpanda Console, and Spark:
+
+```powershell
 docker compose up -d
 ```
 
-The Kafka broker listens on `localhost:9092` and auto-creates the `binance.trades` topic when the producer first writes to it.
-
-Kafka UI is available at:
+Open the UIs:
 
 ```text
-http://localhost:8080
+Kafka UI: http://localhost:8080
+Spark UI: http://localhost:4040
 ```
 
-Use Kafka UI to inspect the `binance.trades` topic, partitions, messages, and consumer activity.
+Create the Kafka topic if it does not exist:
 
-Spark UI is available while the Spark streaming job is running:
-
-```text
-http://localhost:4040
+```powershell
+docker exec crypto-kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --create --if-not-exists --topic binance.trades --partitions 1 --replication-factor 1
 ```
 
-Use Spark UI to inspect jobs, stages, micro-batches, SQL queries, and streaming progress.
+Replay trade data into Kafka:
 
-For a UI-focused walkthrough, see `docs/ui_walkthrough.md`.
-
-## Visual Demo
-
-Open `dashboard/index.html` in a browser to see an interactive simulation of how the real pipeline works without starting Kafka or Spark. The demo shows events flowing through Binance ingestion, raw storage, Kafka, Spark windows, and anomaly output.
-
-## Run the Streaming Pipeline
-
-1. Collect live Binance trades:
-
-```bash
-py producer/binance_collector.py
+```powershell
+py streaming\replay_binance_trades_to_kafka.py --input_dir data\raw --topic binance.trades --bootstrap_servers localhost:9092 --symbols BTCUSDT,ETHUSDT --sleep_mode none --max_events 2000
 ```
 
-2. Replay raw JSONL files into Kafka:
+Spark reads from `binance.trades` and prints windowed aggregates from inside the Spark container. Use Spark UI to inspect jobs, stages, executors, and streaming activity.
 
-```bash
-py streaming/replay_binance_trades_to_kafka.py --input_dir data/raw --topic binance.trades --bootstrap_servers localhost:9092 --symbols BTCUSDT,ETHUSDT --sleep_mode event_time --speed_factor 50
-```
+## Run Locally
 
-3. Run Spark Structured Streaming:
-
-```bash
-spark-submit ^
-  --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0 ^
-  streaming/spark_stream_kafka_binance_clean_aggregate.py ^
-  --bootstrap_servers localhost:9092 ^
-  --topic binance.trades ^
-  --out_path data\stream\aggregates_csv ^
-  --checkpoint_path data\stream\checkpoints\agg ^
-  --window_seconds 60 ^
-  --watermark_seconds 120 ^
-  --spread_threshold_pct 1.0 ^
-  --large_trade_value 100000 ^
-  --high_trade_count 500
-```
-
-On this Windows setup, use the helper script if plain `spark-submit` is not found:
+The local Spark helper sets Java and PySpark paths for Windows:
 
 ```powershell
 .\scripts\start_spark_streaming.ps1
 ```
 
-4. Generate streaming EDA charts:
+Docker is still the recommended runtime on Windows because Spark checkpointing is more reliable inside the Linux container.
 
-```bash
-py eda/eda_from_stream_aggregates.py --input_dir data/stream/aggregates_csv --output_dir output --symbols BTCUSDT,ETHUSDT
-```
+## Offline Analysis
 
-## Batch EDA and Offline Validation
+Run the local batch pipeline:
 
-For a quick offline run:
-
-```bash
+```powershell
 py run_all.py
 ```
 
-Run batch anomaly scoring on the latest cleaned file:
+This performs cleaning, EDA chart generation, and offline anomaly scoring.
 
-```bash
-py processing/anomaly_detection.py
+Important outputs:
+
+```text
+output/
+data/anomalies/latest_trade_anomaly_scores.csv
 ```
 
-Outputs:
+## Stream Processing
 
-- `output/1_price_over_time.png`
-- `output/2_volume_by_symbol.png`
-- `output/3_trade_count_by_hour.png`
-- `output/4_trade_value_distribution.png`
-- `output/5_price_distribution_by_symbol.png`
-- `output/6_trade_count_by_symbol.png`
-- `output/stream_4_anomaly_windows.png` after streaming aggregation
-- `data/anomalies/latest_trade_anomaly_scores.csv`
+Spark normalizes the Binance fields into a readable schema:
 
-## Data Processing and Cleaning
+```text
+s -> symbol
+t -> trade_id
+p -> price
+q -> quantity
+T -> trade_time
+```
 
-The cleaning logic handles:
+The streaming job filters invalid records, derives `trade_value`, applies event-time windows, and calculates:
 
-- schema normalization from Binance fields (`s`, `t`, `p`, `q`, `T`) into readable names,
-- numeric conversion for price, quantity, and trade ID,
-- timestamp conversion from milliseconds to event time,
-- null removal for critical fields,
-- invalid price and quantity filtering,
-- duplicate removal by `trade_id`,
-- derived `trade_value = price * quantity`.
+```text
+avg_price
+min_price
+max_price
+price_spread_pct
+volume
+notional_volume
+max_trade_value
+trade_count
+is_anomaly
+anomaly_reason
+```
 
-The Spark streaming job applies equivalent cleaning before aggregation, so the real-time path and offline EDA path are consistent.
+## Anomaly Signals
 
-## Anomaly Detection Logic
+A window is flagged when one or more configured rules trigger:
 
-The real-time Spark job flags anomalous windows when at least one condition is true:
+- price spread exceeds the threshold
+- a single trade has unusually high notional value
+- trade count is above the traffic-spike threshold
 
-- `price_spread_pct` exceeds the configured threshold,
-- `max_trade_value` exceeds the large-trade threshold,
-- `trade_count` exceeds the traffic-spike threshold.
+The batch anomaly scorer adds rolling z-score checks per symbol for offline validation.
 
-The offline detector adds rolling z-score scoring per symbol for price and trade value. This provides a reproducible validation layer and a path toward a stronger ML model.
+## Visual Workflow
 
-## EDA Insights to Present
+Open this file in a browser:
 
-Use only the strongest charts in a 15-minute presentation:
+```text
+dashboard/index.html
+```
 
-- price over time shows short-term movement and volatility,
-- volume by symbol shows liquidity differences,
-- trade count by hour shows market activity patterns,
-- trade value distribution highlights skew and large-trade behavior,
-- anomaly windows connect the analysis directly to the project goal.
+It shows the data flow from ingestion to Kafka, Spark processing, and anomaly output. It is a lightweight visualizer for explaining the system without touching the running services.
 
-## Requirements Coverage
+## Notes
 
-| PDF requirement | Project coverage |
-| --- | --- |
-| Dataset meets at least one Big Data V | Meets **Velocity** through live/replayed trade streams |
-| Real-time or simulated streaming pipeline | Kafka producer/replay plus Spark Structured Streaming consumer |
-| Dataset description and motivation | Documented above with Binance trade stream rationale |
-| Preprocessing and cleaning | Batch and streaming cleaning implemented |
-| Big Data tools | Kafka and Spark Structured Streaming |
-| Visualizations | Batch EDA and streaming aggregate charts |
-| Insights and future direction | EDA insights plus anomaly scoring and ML path |
-| Pipeline design and workflow | Architecture section explains input to final output |
-| Environment setup and integration | Docker Kafka, Python, and Spark commands |
-| Contribution evidence | Add GitHub commit history or member contribution slide in the final presentation |
-
-## Challenges and Next Steps
-
-Current practical challenges:
-
-- Binance access can be blocked in some networks or regions, so replay mode is included.
-- Spark/Kafka local setup depends on Java, Docker, and Spark installation.
-- The committed sample data is intentionally small; real runs should collect or replay longer trade histories.
-
-Planned improvements:
-
-- persist streaming results to Parquet or Delta Lake for efficient downstream analytics,
-- add alert delivery through Slack/email/webhook,
-- tune thresholds per symbol using longer historical baselines,
-- train an unsupervised anomaly model such as Isolation Forest or robust rolling quantiles,
-- deploy the pipeline on a managed cluster or containerized environment.
+- The committed data is intentionally small. Longer live collection or larger replay files give better baselines.
+- Binance access can vary by network or region. The replay path keeps the pipeline testable even when live collection is unavailable.
+- For durable storage, switch the Spark sink from console/CSV to Parquet, Delta Lake, or another warehouse-backed target.

@@ -1,12 +1,4 @@
-"""
-EDA plots from Spark streaming window aggregates CSV files.
-
-This is meant for the mid-presentation:
-- show cleaning effects (you can compute stats from the streaming output if needed)
-- show demand/volume patterns across time windows
-
-It reads all CSV files under --input_dir (as written by Spark).
-"""
+"""Build charts from Spark streaming aggregate CSV files."""
 
 from __future__ import annotations
 
@@ -46,7 +38,6 @@ def main() -> None:
     symbols = [s.strip().upper() for s in args.symbols.split(",") if s.strip()]
     df = df[df["symbol"].isin(symbols)]
 
-    # Chart 1: trade_count by hour (aggregated across symbols)
     df["hour"] = df["window_start"].dt.hour
     hourly = df.groupby("hour")["trade_count"].sum().reset_index()
 
@@ -59,7 +50,6 @@ def main() -> None:
     plt.savefig(out_dir / "stream_1_trade_count_by_hour.png", dpi=150)
     plt.close()
 
-    # Chart 2: avg_price over time (sampled points for readability)
     plt.figure(figsize=(12, 5))
     for sym in symbols:
         sub = df[df["symbol"] == sym].sort_values("window_start").copy()
@@ -75,7 +65,6 @@ def main() -> None:
     plt.savefig(out_dir / "stream_2_avg_price_over_time.png", dpi=150)
     plt.close()
 
-    # Chart 3: volume over time (sum volume across symbols)
     df_time = df.groupby("window_start")["volume"].sum().reset_index()
     plt.figure(figsize=(12, 5))
     plt.plot(df_time["window_start"], df_time["volume"], color="#f7931a")
@@ -86,7 +75,6 @@ def main() -> None:
     plt.savefig(out_dir / "stream_3_volume_over_time.png", dpi=150)
     plt.close()
 
-    # Chart 4: anomaly windows over time, if produced by the Spark job.
     if "is_anomaly" in df.columns:
         df["is_anomaly"] = df["is_anomaly"].astype(str).str.lower().isin(["true", "1"])
         anomaly_counts = df.groupby("window_start")["is_anomaly"].sum().reset_index()

@@ -1,12 +1,4 @@
-"""
-Exploratory Data Analysis (EDA)
-Creates visualizations for the mid-presentation:
-- Price over time
-- Volume by symbol
-- Trade count by hour
-- Trade value distribution
-- Price distribution by symbol
-"""
+"""Generate exploratory charts from cleaned trade files."""
 
 import pandas as pd
 from pathlib import Path
@@ -16,7 +8,6 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 
-# Paths
 PROJECT_ROOT = Path(__file__).parent.parent
 CLEANED_DIR = PROJECT_ROOT / "data" / "cleaned"
 OUTPUT_DIR = PROJECT_ROOT / "output"
@@ -33,7 +24,6 @@ def load_cleaned_data():
     if "trade_time" in df.columns:
         df["trade_time"] = pd.to_datetime(df["trade_time"])
     else:
-        # If trade_time is missing, create a monotonic time axis so plots still work.
         df["trade_time"] = pd.date_range(start="2024-01-01", periods=len(df), freq="s")
     print(f"Loaded {len(df):,} records from {latest.name}")
     return df
@@ -45,7 +35,6 @@ def plot_price_over_time(df: pd.DataFrame):
     for symbol in df["symbol"].unique():
         sub = df[df["symbol"] == symbol].copy()
         sub = sub.sort_values("trade_time")
-        # Sample if too many points
         if len(sub) > 2000:
             sub = sub.iloc[:: len(sub) // 2000]
         ax.plot(sub["trade_time"], sub["price"], label=symbol, alpha=0.8)
@@ -136,7 +125,7 @@ def plot_trade_count_by_symbol(df: pd.DataFrame):
 
 
 def print_summary_stats(df: pd.DataFrame):
-    """Print summary statistics for presentation."""
+    """Print a compact data summary."""
     print("\n--- SUMMARY STATISTICS ---")
     print(f"Total records: {len(df):,}")
     print(f"Symbols: {list(df['symbol'].unique())}")

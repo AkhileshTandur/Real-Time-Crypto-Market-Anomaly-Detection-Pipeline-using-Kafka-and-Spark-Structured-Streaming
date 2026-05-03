@@ -1,8 +1,4 @@
-"""
-Binance WebSocket Data Collector
-Collects real-time crypto trade data for preprocessing and EDA.
-Run this first to gather data before cleaning and analysis.
-"""
+"""Collect Binance trade events from public WebSocket streams."""
 
 import json
 import asyncio
@@ -15,14 +11,11 @@ except ImportError:
     print("Install websockets: pip install websockets")
     exit(1)
 
-# Output folder for raw data
 OUTPUT_DIR = Path(__file__).parent.parent / "data" / "raw"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-# Symbols to collect (add more if needed)
 SYMBOLS = ["btcusdt", "ethusdt"]
 
-# Collect for this many seconds (60=quick demo, 120+=more data for EDA)
 COLLECT_DURATION_SECONDS = 60
 
 
@@ -43,7 +36,6 @@ async def collect_trades(symbol: str, duration: int) -> list:
             while (datetime.now() - start).seconds < duration:
                 msg = await asyncio.wait_for(ws.recv(), timeout=5.0)
                 data = json.loads(msg)
-                # Add symbol and collection timestamp
                 data["symbol"] = symbol.upper()
                 data["collected_at"] = datetime.now().isoformat()
                 trades.append(data)
@@ -66,11 +58,8 @@ async def main():
         print(f"  {symbol}: collected {len(trades)} trades")
 
     if len(all_trades) == 0:
-        # For the rubric, prefer real collected data over synthetic data.
-        # If this happens, you likely have connectivity/firewall/region issues.
-        raise RuntimeError("No trades were collected from Binance WebSocket.")
+        raise RuntimeError("No trades were collected from Binance WebSocket. Check network access and symbol settings.")
 
-    # Save to JSON file
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     out_file = OUTPUT_DIR / f"trades_{timestamp}.json"
     with open(out_file, "w") as f:
