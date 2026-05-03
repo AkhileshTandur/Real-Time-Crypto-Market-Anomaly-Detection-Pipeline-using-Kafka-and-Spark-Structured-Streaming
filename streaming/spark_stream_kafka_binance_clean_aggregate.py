@@ -1,17 +1,4 @@
-"""
-Spark Structured Streaming consumer:
-- Read Binance trades from Kafka topic as JSON
-- Clean records (null/invalid price/quantity)
-- Window aggregate (1-minute windows per symbol)
-- Write aggregates to disk for EDA/visualization
-
-Run example (adjust spark-submit for your environment):
-  spark-submit streaming\spark_stream_kafka_binance_clean_aggregate.py ^
-    --bootstrap_servers localhost:9092 ^
-    --topic binance.trades ^
-    --out_path data\\stream\\aggregates ^
-    --checkpoint_path data\\stream\\checkpoints\\agg
-"""
+r"""Consume Binance trade events from Kafka and compute windowed market signals."""
 
 from __future__ import annotations
 
@@ -30,6 +17,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--window_seconds", type=int, default=60)
     p.add_argument("--watermark_seconds", type=int, default=120)
     p.add_argument("--trigger_seconds", type=int, default=5)
+    p.add_argument("--sink", choices=["csv", "console"], default="csv")
+    p.add_argument("--spread_threshold_pct", type=float, default=1.0)
+    p.add_argument("--large_trade_value", type=float, default=100000.0)
+    p.add_argument("--high_trade_count", type=int, default=500)
     return p.parse_args()
 
 
@@ -38,12 +29,11 @@ def main() -> None:
 
     spark = (
         SparkSession.builder.appName("binance-kafka-spark-clean-aggregate")
-        # Keep partitions reasonable for a class demo
         .config("spark.sql.shuffle.partitions", "8")
+        .config("spark.sql.caseSensitive", "true")
         .getOrCreate()
     )
 
-    # JSON schema matching Binance websocket trade stream.
     trade_schema = T.StructType(
         [
             T.StructField("e", T.StringType(), True),
@@ -68,7 +58,6 @@ def main() -> None:
     value_df = kafka_df.selectExpr("CAST(value AS STRING) AS json_str")
     parsed = value_df.select(F.from_json("json_str", trade_schema).alias("d")).select("d.*")
 
-    # Normalize names
     trades = (
         parsed.withColumnRenamed("s", "symbol")
         .withColumn("price", F.col("p").cast("double"))
@@ -77,7 +66,6 @@ def main() -> None:
         .withColumn("trade_time", F.to_timestamp((F.col("T") / F.lit(1000)).cast("double")))
     )
 
-    # Clean: keep only rows with valid core fields
     trades_clean = trades.filter(
         F.col("symbol").isNotNull()
         & (F.col("price") > 0)
@@ -96,16 +84,48 @@ def main() -> None:
         .groupBy(F.window("trade_time", window_str), F.col("symbol"))
         .agg(
             F.avg("price").alias("avg_price"),
+            F.min("price").alias("min_price"),
+            F.max("price").alias("max_price"),
             F.sum("quantity").alias("volume"),
+            F.sum("trade_value").alias("notional_volume"),
+            F.max("trade_value").alias("max_trade_value"),
             F.count("*").alias("trade_count"),
+        )
+        .withColumn(
+            "price_spread_pct",
+            F.when(F.col("avg_price") > 0, ((F.col("max_price") - F.col("min_price")) / F.col("avg_price")) * 100).otherwise(
+                F.lit(0.0)
+            ),
+        )
+        .withColumn(
+            "is_anomaly",
+            (F.col("price_spread_pct") >= F.lit(args.spread_threshold_pct))
+            | (F.col("max_trade_value") >= F.lit(args.large_trade_value))
+            | (F.col("trade_count") >= F.lit(args.high_trade_count)),
+        )
+        .withColumn(
+            "anomaly_reason",
+            F.concat_ws(
+                ",",
+                F.when(F.col("price_spread_pct") >= F.lit(args.spread_threshold_pct), F.lit("price_spread")),
+                F.when(F.col("max_trade_value") >= F.lit(args.large_trade_value), F.lit("large_trade")),
+                F.when(F.col("trade_count") >= F.lit(args.high_trade_count), F.lit("traffic_spike")),
+            ),
         )
         .select(
             F.col("window.start").alias("window_start"),
             F.col("window.end").alias("window_end"),
             F.col("symbol"),
             F.col("avg_price"),
+            F.col("min_price"),
+            F.col("max_price"),
+            F.col("price_spread_pct"),
             F.col("volume"),
+            F.col("notional_volume"),
+            F.col("max_trade_value"),
             F.col("trade_count"),
+            F.col("is_anomaly"),
+            F.col("anomaly_reason"),
         )
     )
 
@@ -118,17 +138,19 @@ def main() -> None:
     print(f"  out_path: {out_path}")
     print(f"  checkpoint: {ckpt}")
 
-    query = (
-        agg.writeStream.format("csv")
-        .outputMode("append")
-        .option("path", out_path)
-        .option("checkpointLocation", ckpt)
-        .option("header", "true")
-        .trigger(processingTime=f"{args.trigger_seconds} seconds")
-        .start()
-    )
+    writer = agg.writeStream.outputMode("append").trigger(processingTime=f"{args.trigger_seconds} seconds")
 
-    # Keep running until you stop it (Ctrl+C).
+    if args.sink == "console":
+        query = writer.format("console").option("truncate", "false").start()
+    else:
+        query = (
+            writer.format("csv")
+            .option("path", out_path)
+            .option("checkpointLocation", ckpt)
+            .option("header", "true")
+            .start()
+        )
+
     query.awaitTermination()
 
 

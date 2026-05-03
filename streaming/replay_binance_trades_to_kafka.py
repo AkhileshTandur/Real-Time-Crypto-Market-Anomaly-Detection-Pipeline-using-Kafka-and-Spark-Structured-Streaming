@@ -1,29 +1,9 @@
-"""
-Replay historical Binance trade JSONL files into Kafka.
-
-Expected input format (one JSON object per line):
-{
-  "e": "trade",
-  "E": <event_time_ms>,
-  "s": "BTCUSDT",
-  "t": <trade_id>,
-  "p": "<price_as_string_or_number>",
-  "q": "<quantity_as_string_or_number>",
-  "T": <trade_time_ms>,
-  "m": <is_buyer_maker_bool>
-}
-
-This script is intentionally simple for the mid-presentation:
-- It streams line-by-line to avoid loading the whole dataset in memory.
-- It can run "no sleep" mode to avoid long delays.
-"""
+"""Replay Binance JSONL trade files into Kafka."""
 
 from __future__ import annotations
 
 import argparse
-import glob
 import json
-import os
 import time
 from pathlib import Path
 from typing import Iterable, Optional
@@ -55,7 +35,6 @@ def iter_json_lines(files: Iterable[Path]) -> Iterable[dict]:
 
 
 def guess_symbol(obj: dict) -> Optional[str]:
-    # Binance websocket field is 's'; some converters may use 'symbol'
     if "s" in obj and obj["s"]:
         return str(obj["s"])
     if "symbol" in obj and obj["symbol"]:
@@ -64,7 +43,6 @@ def guess_symbol(obj: dict) -> Optional[str]:
 
 
 def guess_event_time_ms(obj: dict) -> Optional[int]:
-    # Prefer 'T' (trade time). Fallback to 'E' (event time).
     for k in ("T", "E"):
         if k in obj and obj[k] is not None:
             try:
@@ -85,12 +63,11 @@ def main() -> None:
     if not files:
         raise FileNotFoundError(f"No .json/.jsonl files found in: {input_dir}")
 
-    # Print total size so you can confirm it is > 5GB (rubric requirement).
     total_bytes = sum(fp.stat().st_size for fp in files)
     total_gb = total_bytes / (1024**3)
     print(f"Found {len(files)} files, total size ~{total_gb:.2f} GB")
     if total_bytes < 5 * 1024**3:
-        print("WARNING: total size is below 5GB rubric requirement.")
+        print("WARNING: input is small; use this for replay/velocity tests, not volume claims.")
 
     symbols_set = None
     if args.symbols.strip().upper() != "ALL":
@@ -98,8 +75,8 @@ def main() -> None:
 
     producer = KafkaProducer(
         bootstrap_servers=args.bootstrap_servers,
-        value_serializer=lambda v: v,  # we pass bytes already
-        key_serializer=lambda v: v,  # we pass bytes already
+        value_serializer=lambda v: v,
+        key_serializer=lambda v: v,
         linger_ms=20,
         batch_size=16384,
     )

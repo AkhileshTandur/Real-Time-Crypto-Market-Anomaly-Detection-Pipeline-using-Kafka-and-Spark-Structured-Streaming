@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+
+data/stream/
+data/anomalies/
+data/raw/trades_*.json
+data/cleaned/cleaned_trades_*.csv
+output/*.csv
+
+*.log
+logs/
+.spark-ivy/
+spark-test-perms/
+.DS_Store

@@ -10,6 +10,9 @@ Creates visualizations for the mid-presentation:
 
 import pandas as pd
 from pathlib import Path
+import matplotlib
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 

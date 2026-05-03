@@ -1,7 +1,4 @@
-"""
-Generate sample Binance-style trade data for demo when WebSocket is unavailable
-(e.g., HTTP 451 geo-restriction). Same schema as real Binance trade stream.
-"""
+"""Generate Binance-style trade data for local runs when the live stream is unavailable."""
 
 import json
 import random
@@ -11,11 +8,9 @@ from pathlib import Path
 OUTPUT_DIR = Path(__file__).parent.parent / "data" / "raw"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-# Approximate prices (USDT)
 BTC_PRICE = 97000
 ETH_PRICE = 3500
 
-# Generate ~2000 trades per symbol
 NUM_TRADES = 2000
 
 
@@ -26,7 +21,6 @@ def generate_trades(symbol: str, base_price: float, count: int) -> list:
     trade_id = 100000000 + random.randint(0, 99999999)
 
     for _ in range(count):
-        # Random price within ±0.5%
         price = round(base_price * (1 + random.uniform(-0.005, 0.005)), 2)
         quantity = round(random.uniform(0.0001, 2.0), 6)
         ts += random.randint(100, 5000)
@@ -44,20 +38,20 @@ def generate_trades(symbol: str, base_price: float, count: int) -> list:
 
 
 def add_bad_records(trades: list, count: int = 50) -> list:
-    """Add records with quality issues for cleaning demo (nulls, invalid values, dupes)."""
+    """Add a small set of bad records so the cleaning step has realistic work to do."""
     bad = []
     for i in range(count):
         t = trades[i % len(trades)].copy()
         if i % 5 == 0:
-            t["p"] = ""  # null price
+            t["p"] = ""
         elif i % 5 == 1:
-            t["q"] = "-1"  # invalid quantity
+            t["q"] = "-1"
         elif i % 5 == 2:
-            t["p"] = "0"  # zero price
+            t["p"] = "0"
         elif i % 5 == 3:
-            t["t"] = trades[0]["t"]  # duplicate trade_id
+            t["t"] = trades[0]["t"]
         else:
-            t["s"] = None  # null symbol
+            t["s"] = None
         bad.append(t)
     return trades + bad
 
@@ -67,7 +61,7 @@ def main():
     all_trades = []
     all_trades.extend(generate_trades("btcusdt", BTC_PRICE, NUM_TRADES))
     all_trades.extend(generate_trades("ethusdt", ETH_PRICE, NUM_TRADES))
-    all_trades = add_bad_records(all_trades)  # Add ~50 bad records for cleaning demo
+    all_trades = add_bad_records(all_trades)
     random.shuffle(all_trades)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

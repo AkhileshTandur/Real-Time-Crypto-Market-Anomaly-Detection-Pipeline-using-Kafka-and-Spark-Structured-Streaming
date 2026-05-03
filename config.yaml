@@ -5,7 +5,20 @@ symbols:
 
 collect_duration_seconds: 120
 
+kafka:
+  bootstrap_servers: localhost:9092
+  topic: binance.trades
+
+streaming:
+  window_seconds: 60
+  watermark_seconds: 120
+  spread_threshold_pct: 1.0
+  large_trade_value: 100000
+  high_trade_count: 500
+
 # Raw data output
 data:
   raw_dir: data/raw
   cleaned_dir: data/cleaned
+  stream_dir: data/stream/aggregates_csv
+  anomaly_dir: data/anomalies
