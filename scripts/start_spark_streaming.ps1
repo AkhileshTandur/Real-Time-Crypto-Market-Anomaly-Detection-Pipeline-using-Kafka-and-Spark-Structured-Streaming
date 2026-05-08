@@ -66,9 +66,9 @@ $submitArgs += @(
     "--topic", "crypto.trades",
     "--out_path", "data\stream\aggregates_csv",
     "--checkpoint_path", "data\stream\checkpoints\agg",
-    "--window_seconds", "60",
-    "--watermark_seconds", "120",
-    "--sink", "console"
+    "--window_seconds", "10",
+    "--watermark_seconds", "10",
+    "--sink", "csv"
 )
 
 & $sparkSubmit @submitArgs

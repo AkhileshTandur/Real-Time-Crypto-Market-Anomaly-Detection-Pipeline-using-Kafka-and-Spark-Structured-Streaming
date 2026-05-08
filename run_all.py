@@ -1,4 +1,4 @@
-"""Run the local batch pipeline: clean data, build charts, and score anomalies."""
+"""Run local trade-level validation: clean data and score statistical/ML anomalies."""
 
 import argparse
 import subprocess
@@ -11,7 +11,6 @@ RAW_DIR = PROJECT_ROOT / "data" / "raw"
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--collect-live", action="store_true", help="Collect fresh Binance trades before processing.")
     return parser.parse_args()
 
 
@@ -29,12 +28,10 @@ if __name__ == "__main__":
     args = parse_args()
     print("Crypto Project - Offline Validation Pipeline", flush=True)
 
-    if args.collect_live:
-        run(PROJECT_ROOT / "producer" / "binance_collector.py", "1. Collect from Binance WebSocket")
-    elif not list(RAW_DIR.glob("trades_*.json")):
-        raise FileNotFoundError(f"No raw trade files found in {RAW_DIR}. Run with --collect-live first.")
+    if not list(RAW_DIR.glob("trades_*.json")):
+        raise FileNotFoundError(f"No raw trade files found in {RAW_DIR}. Run producer/generate_sample_data.py first.")
 
     run(PROJECT_ROOT / "processing" / "data_cleaning.py", "1. Clean and preprocess")
-    run(PROJECT_ROOT / "eda" / "eda_analysis.py", "2. EDA and charts")
-    run(PROJECT_ROOT / "processing" / "anomaly_detection.py", "3. Batch anomaly scoring")
-    print("\nDone! Check output/ for charts and data/anomalies/ for anomaly scores.")
+    run(PROJECT_ROOT / "processing" / "anomaly_detection.py", "2. Statistical anomaly scoring")
+    run(PROJECT_ROOT / "processing" / "ml_anomaly_detection.py", "3. ML anomaly scoring")
+    print("\nDone! Check data/anomalies/ for statistical and ML anomaly scores.")

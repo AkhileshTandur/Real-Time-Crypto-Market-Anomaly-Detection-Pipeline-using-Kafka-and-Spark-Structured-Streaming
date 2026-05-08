@@ -79,7 +79,7 @@
 
     .metrics {
       display: grid;
-      grid-template-columns: repeat(5, minmax(150px, 1fr));
+      grid-template-columns: repeat(6, minmax(140px, 1fr));
       gap: 14px;
     }
 
@@ -200,6 +200,7 @@
       <div class="metric"><span>Time Range</span><strong id="timeRange">-</strong></div>
       <div class="metric"><span>Avg Trade Value</span><strong id="avgTradeValue">0</strong></div>
       <div class="metric"><span>Anomalies</span><strong id="anomalyCount">0</strong></div>
+      <div class="metric"><span>ML Anomalies</span><strong id="mlAnomalyCount">0</strong></div>
     </section>
 
     <section class="grid">
@@ -291,6 +292,7 @@
       document.getElementById("symbols").textContent = (summary.symbols || []).join(", ") || "-";
       document.getElementById("avgTradeValue").textContent = money(summary.avg_trade_value);
       document.getElementById("anomalyCount").textContent = money(summary.anomaly_count);
+      document.getElementById("mlAnomalyCount").textContent = money(summary.ml_anomaly_count);
 
       if (summary.time_start && summary.time_end) {
         const start = new Date(summary.time_start).toLocaleTimeString();

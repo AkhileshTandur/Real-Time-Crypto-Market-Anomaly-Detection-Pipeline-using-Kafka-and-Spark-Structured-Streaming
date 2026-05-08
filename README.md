@@ -11,7 +11,8 @@ The live source is Coinbase Exchange public WebSocket market data. Trade events 
 - parses and cleans trade events in Spark
 - computes per-symbol event-time window metrics
 - flags suspicious windows based on price spread, large trades, and traffic spikes
-- generates offline EDA charts and anomaly-score files for dashboard visualization
+- trains an offline Isolation Forest model to score ML-based anomalies
+- writes Spark streaming aggregates for EDA charts and dashboard visualization
 
 ## Architecture
 
@@ -44,6 +45,7 @@ streaming/
 processing/
   data_cleaning.py                     Batch cleaning
   anomaly_detection.py                 Offline rolling z-score anomaly scoring
+  ml_anomaly_detection.py              Isolation Forest ML anomaly scoring
 
 eda/
   eda_analysis.py                      Charts from cleaned trade files
@@ -98,7 +100,7 @@ For a short demo:
 py producer\coinbase_live_to_kafka.py --topic crypto.trades --bootstrap_servers localhost:9092 --products BTC-USD,ETH-USD --duration_seconds 120
 ```
 
-Spark reads from `crypto.trades` and prints windowed aggregates from inside the Spark container. Use Spark UI to inspect jobs, stages, executors, and streaming activity.
+Spark reads from `crypto.trades` and writes windowed aggregates to `data/stream/aggregates_csv`. Use Spark UI to inspect jobs, stages, executors, and streaming activity.
 
 ## Run Locally
 
@@ -110,21 +112,48 @@ The local Spark helper sets Java and PySpark paths for Windows:
 
 Docker is still the recommended runtime on Windows because Spark checkpointing is more reliable inside the Linux container.
 
-## Offline Analysis
+## Streaming Charts And Dashboard
 
-Run the local batch analysis pipeline:
+After the live producer has sent data and Spark has written aggregate CSV files, build charts from the streaming output:
+
+```powershell
+py eda\eda_from_stream_aggregates.py
+```
+
+Build dashboard data from the same Spark streaming aggregates:
+
+```powershell
+py dashboard\build_dashboard_data.py
+```
+
+Then open:
+
+```text
+dashboard/index.html
+```
+
+This keeps the main data path unified:
+
+```text
+Coinbase WebSocket -> Kafka -> Spark aggregate CSV -> charts/dashboard
+```
+
+## Offline ML Validation
+
+Run the local batch validation pipeline only when you want trade-level z-score and ML scoring:
 
 ```powershell
 py run_all.py
 ```
 
-This performs cleaning, EDA chart generation, and offline anomaly scoring from files under `data/raw`.
+This performs cleaning, statistical anomaly scoring, and ML anomaly scoring from files under `data/raw`.
 
 Important outputs:
 
 ```text
 output/
 data/anomalies/latest_trade_anomaly_scores.csv
+data/anomalies/latest_ml_anomaly_scores.csv
 ```
 
 ## Stream Processing
@@ -162,20 +191,8 @@ A window is flagged when one or more configured rules trigger:
 - a single trade has unusually high notional value
 - trade count is above the traffic-spike threshold
 
-The batch anomaly scorer adds rolling z-score checks per symbol for offline validation.
+The batch anomaly scorer adds rolling z-score checks per symbol for offline validation. The ML scorer trains an Isolation Forest per cleaned dataset using price, quantity, trade value, price return, and rolling trade-value features.
 
 ## Visual Workflow
 
-Build the dashboard data from the latest cleaned trades and anomaly scores:
-
-```powershell
-py dashboard\build_dashboard_data.py
-```
-
-Then open this file in a browser:
-
-```text
-dashboard/index.html
-```
-
-The dashboard reads `dashboard/data/dashboard_data.json` and shows real project outputs: record counts, symbols, price history, aggregate metrics, and anomaly history.
+The dashboard reads `dashboard/data/dashboard_data.json`. When Spark streaming output exists, the dashboard is built from `data/stream/aggregates_csv`; otherwise it falls back to the latest cleaned batch file.

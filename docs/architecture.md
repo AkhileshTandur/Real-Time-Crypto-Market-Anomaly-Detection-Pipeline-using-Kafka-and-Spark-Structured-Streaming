@@ -9,6 +9,7 @@
 | Spark Structured Streaming | Parses, cleans, windows, aggregates, and flags anomalies |
 | EDA scripts | Convert cleaned and streaming outputs into charts |
 | Batch anomaly scorer | Validates anomaly behavior with rolling symbol-specific baselines |
+| ML anomaly scorer | Uses Isolation Forest to identify unusual trades from engineered features |
 
 ## Data Contract
 

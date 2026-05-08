@@ -69,11 +69,11 @@ services:
       - --checkpoint_path
       - data/stream/checkpoints/agg
       - --window_seconds
-      - "60"
+      - "10"
       - --watermark_seconds
-      - "120"
+      - "10"
       - --sink
-      - console
+      - csv
 
 volumes:
   kafka_data:

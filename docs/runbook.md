@@ -67,23 +67,52 @@ Container logs are also useful:
 docker logs crypto-spark-streaming --tail 100
 ```
 
+Spark writes streaming window aggregates to:
+
+```text
+data/stream/aggregates_csv/
+```
+
+## Streaming EDA Charts
+
+Generate charts from Spark streaming output:
+
+```powershell
+py eda\eda_from_stream_aggregates.py
+```
+
+Outputs are written under:
+
+```text
+output/stream_*.png
+```
+
 ## Stop Services
 
 ```powershell
 docker compose down
 ```
 
-## Offline Pipeline
+## Offline ML Validation
 
 ```powershell
 py run_all.py
 ```
+
+Use this only for trade-level z-score and Isolation Forest scoring from files under `data/raw`.
 
 Outputs are written under:
 
 ```text
 output/
 data/anomalies/
+```
+
+The anomaly folder contains both statistical and ML model outputs:
+
+```text
+data/anomalies/latest_trade_anomaly_scores.csv
+data/anomalies/latest_ml_anomaly_scores.csv
 ```
 
 ## Dashboard Data
@@ -98,4 +127,4 @@ Open:
 dashboard/index.html
 ```
 
-The dashboard reads `dashboard/data/dashboard_data.json`, which is built from the latest cleaned trade file and anomaly score file.
+The dashboard reads `dashboard/data/dashboard_data.json`. It uses Spark streaming aggregate CSV files when they exist, and falls back to the latest cleaned trade file only when no stream output is available.
