@@ -1,6 +1,6 @@
 """
 Data Preprocessing and Cleaning
-Loads raw Binance trade data, cleans it, and saves for EDA.
+Loads raw crypto trade data, cleans it, and saves for EDA.
 Shows: null handling, invalid value filtering, type conversion, schema standardization.
 """
 
@@ -22,7 +22,7 @@ def load_raw_data(raw_file: Path = None) -> pd.DataFrame:
         # Use most recent file if none specified
         files = list(RAW_DIR.glob("trades_*.json"))
         if not files:
-            raise FileNotFoundError(f"No raw data in {RAW_DIR}. Run binance_collector.py first.")
+            raise FileNotFoundError(f"No raw data in {RAW_DIR}. Run coinbase_live_to_kafka.py or generate_sample_data.py first.")
         raw_file = max(files, key=lambda f: f.stat().st_mtime)
 
     print(f"Loading: {raw_file}")
@@ -48,7 +48,7 @@ def clean_trades(df: pd.DataFrame) -> pd.DataFrame:
     initial_count = len(df)
     print("\n--- CLEANING STEPS ---")
 
-    # 1. Rename Binance fields FIRST (before lowercasing - "T" and "t" are different)
+    # 1. Rename compact exchange fields FIRST (before lowercasing - "T" and "t" are different)
     column_map = {"s": "symbol", "t": "trade_id", "p": "price", "q": "quantity", "T": "trade_time"}
     df = df.rename(columns={k: v for k, v in column_map.items() if k in df.columns})
     df = df.loc[:, ~df.columns.duplicated()]

@@ -3,18 +3,16 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Crypto Streaming Pipeline Demo</title>
+  <title>Crypto Market Anomaly Dashboard</title>
   <style>
     :root {
-      color-scheme: light;
       --bg: #f6f7f9;
-      --panel: #ffffff;
+      --panel: #fff;
       --ink: #17202a;
-      --muted: #607080;
+      --muted: #64748b;
       --line: #d7dde5;
       --blue: #2563eb;
       --green: #12805c;
-      --orange: #c75f00;
       --red: #c02626;
       --shadow: 0 8px 28px rgba(15, 23, 42, 0.08);
     }
@@ -23,19 +21,19 @@
 
     body {
       margin: 0;
-      font-family: Inter, Segoe UI, Arial, sans-serif;
+      font-family: Segoe UI, Arial, sans-serif;
       background: var(--bg);
       color: var(--ink);
     }
 
     header {
       display: flex;
-      align-items: center;
       justify-content: space-between;
-      gap: 24px;
+      gap: 18px;
+      align-items: center;
       padding: 20px 28px;
-      border-bottom: 1px solid var(--line);
       background: var(--panel);
+      border-bottom: 1px solid var(--line);
       position: sticky;
       top: 0;
       z-index: 2;
@@ -44,35 +42,34 @@
     h1 {
       margin: 0;
       font-size: 22px;
-      font-weight: 700;
       letter-spacing: 0;
     }
 
-    .controls {
+    .actions {
       display: flex;
-      align-items: center;
       gap: 10px;
       flex-wrap: wrap;
     }
 
-    button {
+    button, a.button {
       height: 38px;
       border: 1px solid var(--line);
+      border-radius: 6px;
       background: #fff;
       color: var(--ink);
-      border-radius: 6px;
       padding: 0 14px;
       font-weight: 650;
       cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
     }
 
     button.primary {
-      background: var(--blue);
       color: #fff;
+      background: var(--blue);
       border-color: var(--blue);
     }
-
-    button:hover { filter: brightness(0.98); }
 
     main {
       padding: 24px;
@@ -80,59 +77,34 @@
       gap: 20px;
     }
 
-    .pipeline {
+    .metrics {
       display: grid;
-      grid-template-columns: repeat(5, minmax(160px, 1fr));
+      grid-template-columns: repeat(5, minmax(150px, 1fr));
       gap: 14px;
-      align-items: stretch;
     }
 
-    .stage,
-    .panel {
+    .metric, .panel {
       background: var(--panel);
       border: 1px solid var(--line);
       border-radius: 8px;
       box-shadow: var(--shadow);
     }
 
-    .stage {
+    .metric {
       padding: 16px;
-      min-height: 130px;
-      position: relative;
-      overflow: hidden;
+      min-height: 96px;
     }
 
-    .stage::after {
-      content: "";
-      position: absolute;
-      right: -10px;
-      top: 50%;
-      width: 20px;
-      height: 20px;
-      border-right: 2px solid var(--line);
-      border-top: 2px solid var(--line);
-      transform: rotate(45deg) translateY(-50%);
-      background: var(--bg);
-    }
-
-    .stage:last-child::after { display: none; }
-
-    .stage h2 {
-      margin: 0 0 8px;
-      font-size: 15px;
-    }
-
-    .stage p {
-      margin: 0;
+    .metric span {
       color: var(--muted);
-      font-size: 13px;
-      line-height: 1.4;
+      font-size: 12px;
+      font-weight: 700;
     }
 
-    .counter {
-      margin-top: 16px;
-      font-size: 28px;
-      font-weight: 800;
+    .metric strong {
+      display: block;
+      margin-top: 10px;
+      font-size: 24px;
     }
 
     .grid {
@@ -152,14 +124,21 @@
       font-size: 16px;
     }
 
+    canvas {
+      width: 100%;
+      height: 300px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+    }
+
     table {
       width: 100%;
       border-collapse: collapse;
       font-size: 13px;
     }
 
-    th,
-    td {
+    th, td {
       border-bottom: 1px solid var(--line);
       padding: 9px 8px;
       text-align: left;
@@ -168,377 +147,233 @@
 
     th {
       color: var(--muted);
-      font-weight: 700;
       background: #fafbfc;
     }
 
-    .status {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      border-radius: 999px;
-      padding: 3px 8px;
-      font-weight: 700;
-      font-size: 12px;
-      background: #eef2ff;
-      color: var(--blue);
-    }
-
-    .status.anomaly {
-      background: #fff1f1;
-      color: var(--red);
-    }
-
-    .metrics {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 12px;
-      margin-bottom: 16px;
-    }
-
-    .metric {
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 12px;
-      background: #fbfcfd;
-    }
-
-    .metric span {
-      color: var(--muted);
-      font-size: 12px;
-      font-weight: 700;
-    }
-
-    .metric strong {
-      display: block;
-      margin-top: 6px;
-      font-size: 20px;
-    }
-
-    canvas {
-      width: 100%;
-      height: 250px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: #fff;
-    }
-
-    .log {
-      height: 250px;
+    .table-wrap {
+      max-height: 320px;
       overflow: auto;
       border: 1px solid var(--line);
       border-radius: 8px;
-      background: #101820;
-      color: #d9f3ea;
-      font-family: Consolas, monospace;
+    }
+
+    .status {
+      border-radius: 999px;
+      padding: 3px 8px;
+      font-weight: 700;
+      background: #fff1f1;
+      color: var(--red);
       font-size: 12px;
-      padding: 12px;
-      line-height: 1.45;
+    }
+
+    .notice {
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: var(--muted);
+      background: #fff;
+      display: none;
     }
 
     @media (max-width: 1000px) {
-      .pipeline,
-      .grid,
-      .metrics {
-        grid-template-columns: 1fr;
-      }
-
-      .stage::after { display: none; }
-
-      header {
-        align-items: flex-start;
-        flex-direction: column;
-      }
+      header { align-items: flex-start; flex-direction: column; }
+      .metrics, .grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 <body>
   <header>
-    <h1>Real-Time Crypto Market Anomaly Detection</h1>
-    <div class="controls">
-      <button class="primary" id="toggleBtn">Pause Stream</button>
-      <button id="shockBtn">Inject Market Shock</button>
-      <button id="resetBtn">Reset</button>
+    <h1>Crypto Market Anomaly Dashboard</h1>
+    <div class="actions">
+      <button class="primary" id="reloadBtn">Reload Data</button>
+      <a class="button" href="http://localhost:8080" target="_blank" rel="noreferrer">Kafka UI</a>
+      <a class="button" href="http://localhost:4040" target="_blank" rel="noreferrer">Spark UI</a>
     </div>
   </header>
 
   <main>
-    <section class="pipeline" aria-label="Pipeline stages">
-      <article class="stage">
-        <h2>1. Binance WebSocket</h2>
-        <p>Live BTCUSDT and ETHUSDT trade ticks arrive continuously.</p>
-        <div class="counter" id="sourceCount">0</div>
-      </article>
-      <article class="stage">
-        <h2>2. Raw JSONL</h2>
-        <p>Events are persisted so runs can be replayed and audited.</p>
-        <div class="counter" id="rawCount">0</div>
-      </article>
-      <article class="stage">
-        <h2>3. Kafka Topic</h2>
-        <p>Kafka buffers high-velocity trades for Spark consumers.</p>
-        <div class="counter" id="kafkaCount">0</div>
-      </article>
-      <article class="stage">
-        <h2>4. Spark Streaming</h2>
-        <p>Spark cleans, windows, aggregates, and computes features.</p>
-        <div class="counter" id="sparkCount">0</div>
-      </article>
-      <article class="stage">
-        <h2>5. Anomaly Output</h2>
-        <p>Suspicious windows are flagged for analysis and alerting.</p>
-        <div class="counter" id="anomalyCount">0</div>
-      </article>
+    <div class="notice" id="notice"></div>
+
+    <section class="metrics">
+      <div class="metric"><span>Total Records</span><strong id="totalRecords">0</strong></div>
+      <div class="metric"><span>Symbols</span><strong id="symbols">-</strong></div>
+      <div class="metric"><span>Time Range</span><strong id="timeRange">-</strong></div>
+      <div class="metric"><span>Avg Trade Value</span><strong id="avgTradeValue">0</strong></div>
+      <div class="metric"><span>Anomalies</span><strong id="anomalyCount">0</strong></div>
     </section>
 
     <section class="grid">
       <article class="panel">
-        <h2>Streaming Window Output</h2>
-        <div class="metrics">
-          <div class="metric">
-            <span>Window</span>
-            <strong id="windowLabel">00:00</strong>
-          </div>
-          <div class="metric">
-            <span>Events/sec</span>
-            <strong id="rateLabel">0</strong>
-          </div>
-          <div class="metric">
-            <span>Kafka Queue</span>
-            <strong id="queueLabel">0</strong>
-          </div>
-        </div>
-        <canvas id="chart" width="900" height="300"></canvas>
+        <h2>Price Over Time</h2>
+        <canvas id="priceChart" width="1000" height="360"></canvas>
       </article>
 
       <article class="panel">
-        <h2>Pipeline Log</h2>
-        <div class="log" id="log"></div>
+        <h2>Symbol Aggregates</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Symbol</th>
+                <th>Avg Price</th>
+                <th>Volume</th>
+                <th>Trades</th>
+                <th>Max Trade Value</th>
+              </tr>
+            </thead>
+            <tbody id="aggregateRows"></tbody>
+          </table>
+        </div>
       </article>
     </section>
 
     <section class="panel">
-      <h2>Latest Cleaned Aggregates</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Symbol</th>
-            <th>Avg Price</th>
-            <th>Volume</th>
-            <th>Trade Count</th>
-            <th>Spread %</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody id="aggregateRows"></tbody>
-      </table>
+      <h2>Anomaly History</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Detected At</th>
+              <th>Symbol</th>
+              <th>Price</th>
+              <th>Quantity</th>
+              <th>Trade Value</th>
+              <th>Price Z</th>
+              <th>Value Z</th>
+              <th>Reason</th>
+            </tr>
+          </thead>
+          <tbody id="anomalyRows"></tbody>
+        </table>
+      </div>
     </section>
   </main>
 
   <script>
-    const state = {
-      running: true,
-      shock: 0,
-      tick: 0,
-      source: 0,
-      raw: 0,
-      kafka: 0,
-      spark: 0,
-      anomalies: 0,
-      queue: [],
-      windows: [],
-      prices: { BTCUSDT: 97000, ETHUSDT: 3500 },
-      aggregates: new Map()
-    };
-
-    const el = id => document.getElementById(id);
-    const chart = el("chart");
+    const chart = document.getElementById("priceChart");
     const ctx = chart.getContext("2d");
+    const notice = document.getElementById("notice");
 
-    function money(value) {
-      return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+    const money = value => Number(value || 0).toLocaleString(undefined, {
+      maximumFractionDigits: 2
+    });
+
+    function showNotice(message) {
+      notice.textContent = message;
+      notice.style.display = "block";
     }
 
-    function log(message) {
-      const line = document.createElement("div");
-      line.textContent = `${new Date().toLocaleTimeString()}  ${message}`;
-      el("log").prepend(line);
-      while (el("log").children.length > 80) el("log").lastChild.remove();
+    function hideNotice() {
+      notice.style.display = "none";
     }
 
-    function randomTrade(symbol) {
-      const baseMove = symbol === "BTCUSDT" ? 45 : 3;
-      const shockMove = state.shock > 0 ? (symbol === "BTCUSDT" ? 1400 : 80) : 0;
-      const direction = Math.random() > 0.48 ? 1 : -1;
-      state.prices[symbol] += direction * (Math.random() * baseMove + Math.random() * shockMove);
-      state.prices[symbol] = Math.max(state.prices[symbol], symbol === "BTCUSDT" ? 1000 : 100);
-      const quantity = symbol === "BTCUSDT" ? Math.random() * 2.4 : Math.random() * 28;
-      return {
-        symbol,
-        price: state.prices[symbol],
-        quantity,
-        tradeValue: state.prices[symbol] * quantity,
-        time: Date.now()
-      };
-    }
-
-    function ingest() {
-      const burst = state.shock > 0 ? 18 : 7;
-      for (let i = 0; i < burst; i++) {
-        const trade = randomTrade(Math.random() > 0.5 ? "BTCUSDT" : "ETHUSDT");
-        state.source++;
-        state.raw++;
-        state.kafka++;
-        state.queue.push(trade);
+    async function loadData() {
+      try {
+        const response = await fetch("data/dashboard_data.json", { cache: "no-store" });
+        if (!response.ok) throw new Error(`dashboard_data.json returned ${response.status}`);
+        const data = await response.json();
+        hideNotice();
+        render(data);
+      } catch (error) {
+        showNotice("Dashboard data is not available. Run: py dashboard\\build_dashboard_data.py");
       }
-      if (state.shock > 0) state.shock--;
     }
 
-    function processSparkWindow() {
-      const batch = state.queue.splice(0, Math.min(state.queue.length, 28));
-      if (!batch.length) return;
-      state.spark += batch.length;
-
-      const grouped = new Map();
-      for (const trade of batch) {
-        if (!trade.symbol || trade.price <= 0 || trade.quantity <= 0) continue;
-        if (!grouped.has(trade.symbol)) grouped.set(trade.symbol, []);
-        grouped.get(trade.symbol).push(trade);
-      }
-
-      for (const [symbol, trades] of grouped) {
-        const prices = trades.map(t => t.price);
-        const volume = trades.reduce((sum, t) => sum + t.quantity, 0);
-        const maxTradeValue = Math.max(...trades.map(t => t.tradeValue));
-        const avgPrice = prices.reduce((sum, p) => sum + p, 0) / prices.length;
-        const minPrice = Math.min(...prices);
-        const maxPrice = Math.max(...prices);
-        const spreadPct = ((maxPrice - minPrice) / avgPrice) * 100;
-        const isAnomaly = spreadPct > 1 || maxTradeValue > 100000 || trades.length > 16;
-        const aggregate = { symbol, avgPrice, volume, tradeCount: trades.length, spreadPct, isAnomaly };
-        state.aggregates.set(symbol, aggregate);
-        state.windows.push({ symbol, avgPrice, isAnomaly });
-        if (isAnomaly) {
-          state.anomalies++;
-          log(`ANOMALY ${symbol}: spread=${spreadPct.toFixed(2)}%, max trade value=${money(maxTradeValue)}`);
-        } else {
-          log(`Spark window ${symbol}: ${trades.length} trades cleaned and aggregated`);
-        }
-      }
-
-      if (state.windows.length > 80) state.windows.splice(0, state.windows.length - 80);
+    function render(data) {
+      renderSummary(data.summary || {});
+      renderAggregates(data.aggregates || []);
+      renderAnomalies(data.anomalies || []);
+      drawPriceChart(data.price_series || []);
     }
 
-    function drawChart() {
+    function renderSummary(summary) {
+      document.getElementById("totalRecords").textContent = money(summary.total_records);
+      document.getElementById("symbols").textContent = (summary.symbols || []).join(", ") || "-";
+      document.getElementById("avgTradeValue").textContent = money(summary.avg_trade_value);
+      document.getElementById("anomalyCount").textContent = money(summary.anomaly_count);
+
+      if (summary.time_start && summary.time_end) {
+        const start = new Date(summary.time_start).toLocaleTimeString();
+        const end = new Date(summary.time_end).toLocaleTimeString();
+        document.getElementById("timeRange").textContent = `${start} - ${end}`;
+      } else {
+        document.getElementById("timeRange").textContent = "-";
+      }
+    }
+
+    function renderAggregates(rows) {
+      document.getElementById("aggregateRows").innerHTML = rows.map(row => `
+        <tr>
+          <td>${row.symbol}</td>
+          <td>${money(row.avg_price)}</td>
+          <td>${money(row.volume)}</td>
+          <td>${money(row.trade_count)}</td>
+          <td>${money(row.max_trade_value)}</td>
+        </tr>
+      `).join("");
+    }
+
+    function renderAnomalies(rows) {
+      document.getElementById("anomalyRows").innerHTML = rows.length ? rows.map(row => `
+        <tr>
+          <td>${row.detected_at ? new Date(row.detected_at).toLocaleString() : "-"}</td>
+          <td>${row.symbol}</td>
+          <td>${money(row.price)}</td>
+          <td>${money(row.quantity)}</td>
+          <td>${money(row.trade_value)}</td>
+          <td>${Number(row.price_zscore).toFixed(2)}</td>
+          <td>${Number(row.trade_value_zscore).toFixed(2)}</td>
+          <td><span class="status">${row.reason}</span></td>
+        </tr>
+      `).join("") : `
+        <tr><td colspan="8">No anomalies found in the latest anomaly score file.</td></tr>
+      `;
+    }
+
+    function drawPriceChart(points) {
       ctx.clearRect(0, 0, chart.width, chart.height);
       ctx.strokeStyle = "#d7dde5";
       ctx.lineWidth = 1;
-      for (let y = 40; y < chart.height; y += 50) {
+      for (let y = 40; y < chart.height - 20; y += 55) {
         ctx.beginPath();
-        ctx.moveTo(42, y);
-        ctx.lineTo(chart.width - 18, y);
+        ctx.moveTo(48, y);
+        ctx.lineTo(chart.width - 20, y);
         ctx.stroke();
       }
 
-      const btc = state.windows.filter(w => w.symbol === "BTCUSDT").slice(-35);
-      const eth = state.windows.filter(w => w.symbol === "ETHUSDT").slice(-35);
-      drawSeries(btc, "#2563eb", 90000, 104000);
-      drawSeries(eth, "#12805c", 3000, 4200);
+      const symbols = [...new Set(points.map(point => point.symbol))];
+      const colors = ["#2563eb", "#12805c", "#c02626", "#7c3aed"];
+      symbols.forEach((symbol, index) => {
+        const series = points.filter(point => point.symbol === symbol);
+        drawSeries(series, colors[index % colors.length]);
+      });
     }
 
-    function drawSeries(series, color, min, max) {
+    function drawSeries(series, color) {
       if (series.length < 2) return;
+      const prices = series.map(point => point.price);
+      const min = Math.min(...prices);
+      const max = Math.max(...prices);
+      const pad = Math.max((max - min) * 0.1, 1);
+      const lo = min - pad;
+      const hi = max + pad;
+
       ctx.strokeStyle = color;
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 2.5;
       ctx.beginPath();
+
       series.forEach((point, index) => {
-        const x = 48 + index * ((chart.width - 80) / 34);
-        const y = chart.height - 32 - ((point.avgPrice - min) / (max - min)) * (chart.height - 70);
+        const x = 48 + index * ((chart.width - 80) / Math.max(series.length - 1, 1));
+        const y = chart.height - 32 - ((point.price - lo) / (hi - lo)) * (chart.height - 70);
         if (index === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       });
+
       ctx.stroke();
-
-      for (let i = 0; i < series.length; i++) {
-        if (!series[i].isAnomaly) continue;
-        const x = 48 + i * ((chart.width - 80) / 34);
-        const y = chart.height - 32 - ((series[i].avgPrice - min) / (max - min)) * (chart.height - 70);
-        ctx.fillStyle = "#c02626";
-        ctx.beginPath();
-        ctx.arc(x, y, 5, 0, Math.PI * 2);
-        ctx.fill();
-      }
     }
 
-    function renderAggregates() {
-      const rows = [...state.aggregates.values()].map(row => `
-        <tr>
-          <td>${row.symbol}</td>
-          <td>${money(row.avgPrice)}</td>
-          <td>${row.volume.toFixed(4)}</td>
-          <td>${row.tradeCount}</td>
-          <td>${row.spreadPct.toFixed(2)}</td>
-          <td><span class="status ${row.isAnomaly ? "anomaly" : ""}">${row.isAnomaly ? "Anomaly" : "Normal"}</span></td>
-        </tr>
-      `).join("");
-      el("aggregateRows").innerHTML = rows;
-    }
-
-    function render() {
-      el("sourceCount").textContent = state.source;
-      el("rawCount").textContent = state.raw;
-      el("kafkaCount").textContent = state.kafka;
-      el("sparkCount").textContent = state.spark;
-      el("anomalyCount").textContent = state.anomalies;
-      el("queueLabel").textContent = state.queue.length;
-      el("rateLabel").textContent = state.shock > 0 ? "18" : "7";
-      el("windowLabel").textContent = `${Math.floor(state.tick / 4).toString().padStart(2, "0")}:00`;
-      renderAggregates();
-      drawChart();
-    }
-
-    function loop() {
-      if (state.running) {
-        state.tick++;
-        ingest();
-        processSparkWindow();
-        render();
-      }
-    }
-
-    el("toggleBtn").addEventListener("click", () => {
-      state.running = !state.running;
-      el("toggleBtn").textContent = state.running ? "Pause Stream" : "Resume Stream";
-    });
-
-    el("shockBtn").addEventListener("click", () => {
-      state.shock = 8;
-      log("Injected market shock: higher volatility and trade burst");
-    });
-
-    el("resetBtn").addEventListener("click", () => {
-      Object.assign(state, {
-        running: true,
-        shock: 0,
-        tick: 0,
-        source: 0,
-        raw: 0,
-        kafka: 0,
-        spark: 0,
-        anomalies: 0,
-        queue: [],
-        windows: [],
-        prices: { BTCUSDT: 97000, ETHUSDT: 3500 },
-        aggregates: new Map()
-      });
-      el("toggleBtn").textContent = "Pause Stream";
-      el("log").innerHTML = "";
-      render();
-    });
-
-    log("Visual demo started");
-    setInterval(loop, 800);
-    render();
+    document.getElementById("reloadBtn").addEventListener("click", loadData);
+    loadData();
   </script>
 </body>
 </html>

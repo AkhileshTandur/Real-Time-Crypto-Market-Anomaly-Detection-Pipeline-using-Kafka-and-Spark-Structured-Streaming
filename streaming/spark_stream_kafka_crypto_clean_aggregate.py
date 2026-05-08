@@ -1,17 +1,16 @@
-r"""Consume Binance trade events from Kafka and compute windowed market signals."""
+r"""Consume live crypto trade events from Kafka and compute windowed market signals."""
 
 from __future__ import annotations
 
 import argparse
 from pathlib import Path
-
 from pyspark.sql import SparkSession, functions as F, types as T
 
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser()
     p.add_argument("--bootstrap_servers", default="localhost:9092")
-    p.add_argument("--topic", default="binance.trades")
+    p.add_argument("--topic", default="crypto.trades")
     p.add_argument("--out_path", default=str(Path("data") / "stream" / "aggregates_csv"))
     p.add_argument("--checkpoint_path", default=str(Path("data") / "stream" / "checkpoints" / "agg"))
     p.add_argument("--window_seconds", type=int, default=60)
@@ -28,7 +27,7 @@ def main() -> None:
     args = parse_args()
 
     spark = (
-        SparkSession.builder.appName("binance-kafka-spark-clean-aggregate")
+        SparkSession.builder.appName("crypto-kafka-spark-clean-aggregate")
         .config("spark.sql.shuffle.partitions", "8")
         .config("spark.sql.caseSensitive", "true")
         .getOrCreate()

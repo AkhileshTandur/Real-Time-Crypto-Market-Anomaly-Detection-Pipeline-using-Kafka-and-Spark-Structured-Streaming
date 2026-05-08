@@ -17,7 +17,7 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser()
     p.add_argument("--input_dir", default=str(Path("data") / "stream" / "aggregates_csv"))
     p.add_argument("--output_dir", default="output")
-    p.add_argument("--symbols", default="BTCUSDT,ETHUSDT")
+    p.add_argument("--symbols", default="BTCUSD,ETHUSD")
     return p.parse_args()
 
 

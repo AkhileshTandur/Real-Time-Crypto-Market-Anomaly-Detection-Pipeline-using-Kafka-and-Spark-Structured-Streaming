@@ -1,4 +1,4 @@
-"""Generate Binance-style trade data for local runs when the live stream is unavailable."""
+"""Generate crypto trade data for local runs when the live stream is unavailable."""
 
 import json
 import random
@@ -57,10 +57,10 @@ def add_bad_records(trades: list, count: int = 50) -> list:
 
 
 def main():
-    print("Generating sample trade data (Binance format)...")
+    print("Generating sample crypto trade data...")
     all_trades = []
-    all_trades.extend(generate_trades("btcusdt", BTC_PRICE, NUM_TRADES))
-    all_trades.extend(generate_trades("ethusdt", ETH_PRICE, NUM_TRADES))
+    all_trades.extend(generate_trades("BTCUSD", BTC_PRICE, NUM_TRADES))
+    all_trades.extend(generate_trades("ETHUSD", ETH_PRICE, NUM_TRADES))
     all_trades = add_bad_records(all_trades)
     random.shuffle(all_trades)
 

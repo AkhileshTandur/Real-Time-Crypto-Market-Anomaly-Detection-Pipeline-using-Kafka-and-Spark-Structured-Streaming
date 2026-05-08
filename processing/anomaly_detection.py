@@ -1,4 +1,4 @@
-"""Offline anomaly scoring for cleaned Binance trade files."""
+"""Offline anomaly scoring for cleaned crypto trade files."""
 
 from __future__ import annotations
 

@@ -1,25 +1,25 @@
 # Real-Time Crypto Market Anomaly Detection
 
-This project streams crypto trade data through Kafka, processes it with Spark Structured Streaming, and flags unusual market activity using short-window price, volume, and trade-count signals.
+This project streams live cryptocurrency trades through Kafka, processes them with Spark Structured Streaming, and flags unusual market activity using short-window price, volume, and trade-count signals.
 
-The pipeline is designed around live market data. Binance trade events arrive continuously, Kafka buffers the event stream, and Spark turns raw ticks into cleaned aggregates that can be monitored or analyzed later.
+The live source is Coinbase Exchange public WebSocket market data. Trade events are converted into a compact exchange-neutral schema, sent to Kafka, and consumed by Spark in real time.
 
 ## What It Does
 
-- collects Binance trade events for pairs such as `BTCUSDT` and `ETHUSDT`
-- replays stored JSONL trade files into Kafka for repeatable runs
+- collects live Coinbase trade events for products such as `BTC-USD` and `ETH-USD`
+- publishes live trade records directly into Kafka topic `crypto.trades`
 - parses and cleans trade events in Spark
-- computes per-symbol time-window metrics
+- computes per-symbol event-time window metrics
 - flags suspicious windows based on price spread, large trades, and traffic spikes
-- generates offline EDA charts and anomaly-score files
+- generates offline EDA charts and anomaly-score files for dashboard visualization
 
 ## Architecture
 
 ```text
-Binance WebSocket / JSONL replay
+Coinbase WebSocket
         |
         v
-Kafka topic: binance.trades
+Kafka topic: crypto.trades
         |
         v
 Spark Structured Streaming
@@ -28,19 +28,18 @@ Spark Structured Streaming
 Windowed market metrics + anomaly flags
         |
         v
-Charts, logs, and downstream analysis
+Charts, logs, and dashboard analysis
 ```
 
 ## Repository Layout
 
 ```text
 producer/
-  binance_collector.py                 Live Binance WebSocket collector
-  generate_sample_data.py              Local Binance-style data generator
+  coinbase_live_to_kafka.py            Live Coinbase WebSocket to Kafka producer
+  generate_sample_data.py              Local crypto data generator
 
 streaming/
-  replay_binance_trades_to_kafka.py    JSONL-to-Kafka replay producer
-  spark_stream_kafka_binance_clean_aggregate.py
+  spark_stream_kafka_crypto_clean_aggregate.py
 
 processing/
   data_cleaning.py                     Batch cleaning
@@ -52,6 +51,7 @@ eda/
 
 dashboard/
   index.html                           Browser-based workflow visualizer
+  build_dashboard_data.py              Builds dashboard/data/dashboard_data.json
 
 docs/
   architecture.md                      Data contract and component overview
@@ -71,7 +71,7 @@ Install Python dependencies:
 py -m pip install -r requirements.txt
 ```
 
-## Run With Docker
+## Run Live Streaming
 
 Start Kafka, Redpanda Console, and Spark:
 
@@ -86,19 +86,19 @@ Kafka UI: http://localhost:8080
 Spark UI: http://localhost:4040
 ```
 
-Create the Kafka topic if it does not exist:
+Send live Coinbase trades to Kafka:
 
 ```powershell
-docker exec crypto-kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --create --if-not-exists --topic binance.trades --partitions 1 --replication-factor 1
+py producer\coinbase_live_to_kafka.py --topic crypto.trades --bootstrap_servers localhost:9092 --products BTC-USD,ETH-USD
 ```
 
-Replay trade data into Kafka:
+For a short demo:
 
 ```powershell
-py streaming\replay_binance_trades_to_kafka.py --input_dir data\raw --topic binance.trades --bootstrap_servers localhost:9092 --symbols BTCUSDT,ETHUSDT --sleep_mode none --max_events 2000
+py producer\coinbase_live_to_kafka.py --topic crypto.trades --bootstrap_servers localhost:9092 --products BTC-USD,ETH-USD --duration_seconds 120
 ```
 
-Spark reads from `binance.trades` and prints windowed aggregates from inside the Spark container. Use Spark UI to inspect jobs, stages, executors, and streaming activity.
+Spark reads from `crypto.trades` and prints windowed aggregates from inside the Spark container. Use Spark UI to inspect jobs, stages, executors, and streaming activity.
 
 ## Run Locally
 
@@ -112,13 +112,13 @@ Docker is still the recommended runtime on Windows because Spark checkpointing i
 
 ## Offline Analysis
 
-Run the local batch pipeline:
+Run the local batch analysis pipeline:
 
 ```powershell
 py run_all.py
 ```
 
-This performs cleaning, EDA chart generation, and offline anomaly scoring.
+This performs cleaning, EDA chart generation, and offline anomaly scoring from files under `data/raw`.
 
 Important outputs:
 
@@ -129,7 +129,7 @@ data/anomalies/latest_trade_anomaly_scores.csv
 
 ## Stream Processing
 
-Spark normalizes the Binance fields into a readable schema:
+Spark normalizes compact exchange fields into a readable schema:
 
 ```text
 s -> symbol
@@ -166,16 +166,16 @@ The batch anomaly scorer adds rolling z-score checks per symbol for offline vali
 
 ## Visual Workflow
 
-Open this file in a browser:
+Build the dashboard data from the latest cleaned trades and anomaly scores:
+
+```powershell
+py dashboard\build_dashboard_data.py
+```
+
+Then open this file in a browser:
 
 ```text
 dashboard/index.html
 ```
 
-It shows the data flow from ingestion to Kafka, Spark processing, and anomaly output. It is a lightweight visualizer for explaining the system without touching the running services.
-
-## Notes
-
-- The committed data is intentionally small. Longer live collection or larger replay files give better baselines.
-- Binance access can vary by network or region. The replay path keeps the pipeline testable even when live collection is unavailable.
-- For durable storage, switch the Spark sink from console/CSV to Parquet, Delta Lake, or another warehouse-backed target.
+The dashboard reads `dashboard/data/dashboard_data.json` and shows real project outputs: record counts, symbols, price history, aggregate metrics, and anomaly history.

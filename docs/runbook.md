@@ -21,27 +21,35 @@ Kafka UI: http://localhost:8080
 Spark UI: http://localhost:4040
 ```
 
-Kafka UI should show the Kafka cluster and the `binance.trades` topic after the topic has been created.
+Kafka UI should show the Kafka cluster and the `crypto.trades` topic after the topic has been created.
 
 Spark UI is available only while the Spark streaming application is running.
 
 ## Create Topic
 
+The compose file creates the topic automatically. To create it manually:
+
 ```powershell
-docker exec crypto-kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --create --if-not-exists --topic binance.trades --partitions 1 --replication-factor 1
+docker exec crypto-kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --create --if-not-exists --topic crypto.trades --partitions 1 --replication-factor 1
 ```
 
-## Send Data
+## Send Live Data
 
 ```powershell
-py streaming\replay_binance_trades_to_kafka.py --input_dir data\raw --topic binance.trades --bootstrap_servers localhost:9092 --symbols BTCUSDT,ETHUSDT --sleep_mode none --max_events 2000
+py producer\coinbase_live_to_kafka.py --topic crypto.trades --bootstrap_servers localhost:9092 --products BTC-USD,ETH-USD
+```
+
+For a timed demo:
+
+```powershell
+py producer\coinbase_live_to_kafka.py --topic crypto.trades --bootstrap_servers localhost:9092 --products BTC-USD,ETH-USD --duration_seconds 120
 ```
 
 ## Verify Kafka
 
 In Kafka UI:
 
-- open `binance.trades`
+- open `crypto.trades`
 - confirm offsets are increasing
 - inspect sample JSON messages
 
@@ -77,3 +85,17 @@ Outputs are written under:
 output/
 data/anomalies/
 ```
+
+## Dashboard Data
+
+```powershell
+py dashboard\build_dashboard_data.py
+```
+
+Open:
+
+```text
+dashboard/index.html
+```
+
+The dashboard reads `dashboard/data/dashboard_data.json`, which is built from the latest cleaned trade file and anomaly score file.

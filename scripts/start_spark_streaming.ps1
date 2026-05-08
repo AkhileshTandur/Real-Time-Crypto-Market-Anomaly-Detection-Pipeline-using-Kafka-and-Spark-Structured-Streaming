@@ -61,9 +61,9 @@ if ($localJars.Count -gt 0) {
 }
 
 $submitArgs += @(
-    "streaming/spark_stream_kafka_binance_clean_aggregate.py",
+    "streaming/spark_stream_kafka_crypto_clean_aggregate.py",
     "--bootstrap_servers", "localhost:9092",
-    "--topic", "binance.trades",
+    "--topic", "crypto.trades",
     "--out_path", "data\stream\aggregates_csv",
     "--checkpoint_path", "data\stream\checkpoints\agg",
     "--window_seconds", "60",

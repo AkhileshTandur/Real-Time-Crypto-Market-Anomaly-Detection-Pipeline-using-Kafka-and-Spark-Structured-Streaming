@@ -1,13 +1,13 @@
-# Crypto Project - Binance Data Collection Config
+# Crypto Project - Live Crypto Data Collection Config
 symbols:
-  - btcusdt
-  - ethusdt
+  - BTC-USD
+  - ETH-USD
 
 collect_duration_seconds: 120
 
 kafka:
   bootstrap_servers: localhost:9092
-  topic: binance.trades
+  topic: crypto.trades
 
 streaming:
   window_seconds: 60

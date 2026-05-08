@@ -8,6 +8,7 @@ data/stream/
 data/anomalies/
 data/raw/trades_*.json
 data/cleaned/cleaned_trades_*.csv
+dashboard/data/dashboard_data.json
 output/*.csv
 
 *.log
@@ -15,4 +16,5 @@ logs/
 .spark-ivy/
 spark-test-perms/
 .DS_Store
-Group Project Bigdata.pdf
+*.pdf
+*.pptx

@@ -1,30 +1,6 @@
 # UI Walkthrough
 
-This project has three UI views.
-
-## 1. Docker Desktop
-
-Use Docker Desktop to see and control running services:
-
-- `crypto-kafka`
-- `crypto-kafka-ui`
-- optional `crypto-spark-streaming`
-
-Kafka and Kafka UI start with:
-
-```powershell
-docker compose up -d
-```
-
-If you want Spark to also run as a Docker service, start the `spark` profile:
-
-```powershell
-docker compose --profile spark up -d
-```
-
-After that, Docker Desktop will show the Spark container and its logs.
-
-## 2. Kafka UI
+## Kafka UI
 
 Open:
 
@@ -32,34 +8,35 @@ Open:
 http://localhost:8080
 ```
 
-Use it to inspect:
+Use it to verify:
 
-- Kafka cluster status,
-- topics,
-- `binance.trades`,
-- partitions,
-- messages,
-- consumer activity.
+- the Kafka cluster is running
+- topic `crypto.trades` exists
+- live messages are arriving
+- offsets increase while the producer runs
 
-## 3. Spark UI
+## Spark UI
 
-Open while Spark is running:
+Open:
 
 ```text
 http://localhost:4040
 ```
 
-Use it to inspect:
+Use it to verify:
 
-- Spark jobs,
-- stages,
-- SQL queries,
-- streaming micro-batches,
-- processing duration.
+- the streaming job is active
+- micro-batches are running
+- Spark stages and executors are healthy
+- the stream reads from Kafka and computes windowed aggregates
 
-Spark UI only exists while the Spark streaming application is alive. If the Spark container or local Spark process stops, `localhost:4040` stops working.
+## Dashboard
 
-## Visual Project Demo
+Build dashboard data:
+
+```powershell
+py dashboard\build_dashboard_data.py
+```
 
 Open:
 
@@ -67,8 +44,10 @@ Open:
 dashboard/index.html
 ```
 
-This is the project explanation UI. It simulates the end-to-end flow:
+The dashboard is generated from the latest cleaned trade file and anomaly score file. It is not a live WebSocket dashboard; rebuild `dashboard_data.json` after generating new offline outputs.
+
+## End-to-End Flow
 
 ```text
-Binance -> Raw JSON -> Kafka -> Spark -> Anomaly Output
+Coinbase WebSocket -> Kafka topic crypto.trades -> Spark -> anomaly output
 ```

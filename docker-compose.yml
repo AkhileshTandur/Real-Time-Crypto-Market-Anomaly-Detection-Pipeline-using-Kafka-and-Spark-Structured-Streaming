@@ -30,11 +30,23 @@ services:
     environment:
       KAFKA_BROKERS: kafka:29092
 
+  kafka-init:
+    image: apache/kafka:3.7.0
+    container_name: crypto-kafka-init
+    depends_on:
+      - kafka
+    command:
+      - /bin/bash
+      - -lc
+      - |
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --create --if-not-exists --topic crypto.trades --partitions 1 --replication-factor 1
+
   spark-streaming:
     image: apache/spark:3.5.0
     container_name: crypto-spark-streaming
     depends_on:
-      - kafka
+      kafka-init:
+        condition: service_completed_successfully
     ports:
       - "4040:4040"
     working_dir: /app
@@ -47,11 +59,11 @@ services:
       - local[*]
       - --packages
       - org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0
-      - streaming/spark_stream_kafka_binance_clean_aggregate.py
+      - streaming/spark_stream_kafka_crypto_clean_aggregate.py
       - --bootstrap_servers
       - kafka:29092
       - --topic
-      - binance.trades
+      - crypto.trades
       - --out_path
       - data/stream/aggregates_csv
       - --checkpoint_path
