@@ -1,13 +1,23 @@
-# Crypto Project - Binance Data Collection Config
-symbols:
-  - btcusdt
-  - ethusdt
+# Crypto Project - Coinbase Data Collection Config
+# Reference values for the Coinbase pipeline. Scripts use argparse defaults
+# that match these values; this file is the single place to update them when
+# planning a demo.
+
+source: coinbase
+
+product_ids:
+  - BTC-USD
+  - ETH-USD
 
 collect_duration_seconds: 120
 
+websocket:
+  url: wss://ws-feed.exchange.coinbase.com
+  channel: matches
+
 kafka:
   bootstrap_servers: localhost:9092
-  topic: binance.trades
+  topic: coinbase.trades
 
 streaming:
   window_seconds: 60
@@ -16,9 +26,10 @@ streaming:
   large_trade_value: 100000
   high_trade_count: 500
 
-# Raw data output
 data:
   raw_dir: data/raw
   cleaned_dir: data/cleaned
-  stream_dir: data/stream/aggregates_csv
+  stream_csv_dir: data/stream/coinbase_aggregates_csv
+  stream_delta_dir: data/stream/coinbase_aggregates_delta
+  stream_checkpoint_dir: data/stream/checkpoints/coinbase_agg
   anomaly_dir: data/anomalies

@@ -1,6 +1,6 @@
 # UI Walkthrough
 
-This project has three UI views.
+This project has four places to look during a demo.
 
 ## 1. Docker Desktop
 
@@ -8,21 +8,15 @@ Use Docker Desktop to see and control running services:
 
 - `crypto-kafka`
 - `crypto-kafka-ui`
-- optional `crypto-spark-streaming`
+- `crypto-spark-streaming` (only while the streaming `docker compose run` is alive)
 
-Kafka and Kafka UI start with:
+Start Kafka and Kafka UI with:
 
-```powershell
-docker compose up -d
+```bash
+docker compose up -d kafka kafka-ui
 ```
 
-If you want Spark to also run as a Docker service, start the `spark` profile:
-
-```powershell
-docker compose --profile spark up -d
-```
-
-After that, Docker Desktop will show the Spark container and its logs.
+The Spark streaming container is launched separately (see `docs/runbook.md`) so it can be stopped/restarted without disturbing Kafka.
 
 ## 2. Kafka UI
 
@@ -34,16 +28,15 @@ http://localhost:8080
 
 Use it to inspect:
 
-- Kafka cluster status,
-- topics,
-- `binance.trades`,
-- partitions,
-- messages,
-- consumer activity.
+- Kafka cluster status
+- topics, especially `coinbase.trades`
+- partitions
+- messages (each record is a normalized Coinbase trade JSON)
+- consumer activity from Spark
 
 ## 3. Spark UI
 
-Open while Spark is running:
+Open while the Spark streaming application is running:
 
 ```text
 http://localhost:4040
@@ -51,15 +44,13 @@ http://localhost:4040
 
 Use it to inspect:
 
-- Spark jobs,
-- stages,
-- SQL queries,
-- streaming micro-batches,
-- processing duration.
+- Spark jobs and stages
+- the Structured Streaming tab (input rate, processing time, batch durations)
+- SQL query plans for the windowed aggregation
 
-Spark UI only exists while the Spark streaming application is alive. If the Spark container or local Spark process stops, `localhost:4040` stops working.
+The Spark UI exists only while the streaming application is alive. If the Spark container or local Spark process stops, `localhost:4040` stops working.
 
-## Visual Project Demo
+## 4. Visual Project Demo
 
 Open:
 
@@ -70,5 +61,7 @@ dashboard/index.html
 This is the project explanation UI. It simulates the end-to-end flow:
 
 ```text
-Binance -> Raw JSON -> Kafka -> Spark -> Anomaly Output
+Coinbase WebSocket -> Raw JSONL -> Kafka -> Spark -> Delta + Anomaly Output
 ```
+
+It is a teaching/explainer UI; live data flows are visible in Kafka UI, Spark UI, and the Delta transaction log (`data/stream/coinbase_aggregates_delta/_delta_log/`).

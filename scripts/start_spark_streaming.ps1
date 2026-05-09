@@ -6,7 +6,7 @@ $sparkHome = Join-Path $pythonRoot "Lib\site-packages\pyspark"
 $sparkSubmit = Join-Path $pythonRoot "Scripts\spark-submit.cmd"
 $javaHome = "C:\Program Files\Java\jdk-17"
 $ivyHome = Join-Path (Get-Location) ".spark-ivy"
-$userIvyJars = "C:\Users\Akhilesh Tandur\.ivy2\jars"
+$userIvyJars = Join-Path $env:USERPROFILE ".ivy2\jars"
 
 if (!(Test-Path $pythonExe)) {
     throw "Python executable not found: $pythonExe"
@@ -41,6 +41,8 @@ $requiredJarPatterns = @(
     "org.apache.spark_spark-sql-kafka-0-10_2.12-3.5.0.jar",
     "org.apache.spark_spark-token-provider-kafka-0-10_2.12-3.5.0.jar",
     "org.apache.kafka_kafka-clients-*.jar",
+    "io.delta_delta-spark_2.12-*.jar",
+    "io.delta_delta-storage-*.jar",
     "org.lz4_lz4-java-*.jar",
     "org.xerial.snappy_snappy-java-*.jar",
     "org.slf4j_slf4j-api-*.jar",
@@ -57,18 +59,22 @@ if (Test-Path $userIvyJars) {
 if ($localJars.Count -gt 0) {
     $submitArgs += @("--jars", (($localJars | Select-Object -Unique) -join ","))
 } else {
-    $submitArgs += @("--packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0")
+    $submitArgs += @(
+        "--packages",
+        "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,io.delta:delta-spark_2.12:3.1.0"
+    )
 }
 
 $submitArgs += @(
-    "streaming/spark_stream_kafka_binance_clean_aggregate.py",
+    "streaming/spark_stream_kafka_coinbase_clean_aggregate.py",
     "--bootstrap_servers", "localhost:9092",
-    "--topic", "binance.trades",
-    "--out_path", "data\stream\aggregates_csv",
-    "--checkpoint_path", "data\stream\checkpoints\agg",
+    "--topic", "coinbase.trades",
+    "--out_path", "data\stream\coinbase_aggregates_csv",
+    "--delta_path", "data\stream\coinbase_aggregates_delta",
+    "--checkpoint_path", "data\stream\checkpoints\coinbase_agg",
     "--window_seconds", "60",
     "--watermark_seconds", "120",
-    "--sink", "console"
+    "--sink", "delta"
 )
 
 & $sparkSubmit @submitArgs

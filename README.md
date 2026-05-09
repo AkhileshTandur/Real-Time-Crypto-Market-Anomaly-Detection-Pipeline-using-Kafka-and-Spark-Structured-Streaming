@@ -1,62 +1,80 @@
-# Real-Time Crypto Market Anomaly Detection
+# Real-Time Coinbase Market Anomaly Detection
 
-This project streams crypto trade data through Kafka, processes it with Spark Structured Streaming, and flags unusual market activity using short-window price, volume, and trade-count signals.
+This project streams Coinbase trade data through Kafka, processes it with Spark Structured Streaming, lands windowed aggregates in Delta Lake, and flags unusual market activity using both rule-based signals and an Isolation Forest model.
 
-The pipeline is designed around live market data. Binance trade events arrive continuously, Kafka buffers the event stream, and Spark turns raw ticks into cleaned aggregates that can be monitored or analyzed later.
+The pipeline supports live Coinbase WebSocket ingestion and, for reproducible demos, a Coinbase-format synthetic generator with controlled dirty data. Both real and synthetic records are normalized into one schema, replayed into Kafka, processed by Spark, stored in Delta Lake, and analyzed with scikit-learn.
 
 ## What It Does
 
-- collects Binance trade events for pairs such as `BTCUSDT` and `ETHUSDT`
-- replays stored JSONL trade files into Kafka for repeatable runs
-- parses and cleans trade events in Spark
-- computes per-symbol time-window metrics
-- flags suspicious windows based on price spread, large trades, and traffic spikes
-- generates offline EDA charts and anomaly-score files
+- collects Coinbase trade events for products `BTC-USD` and `ETH-USD` from the public Exchange WebSocket (`wss://ws-feed.exchange.coinbase.com`, `matches` channel)
+- generates Coinbase-format synthetic trade data with realistic dirty records for repeatable runs
+- replays normalized JSONL files into Kafka topic `coinbase.trades`
+- parses, cleans, windows, and aggregates trades in Spark Structured Streaming
+- writes ACID Delta Lake commits per micro-batch (with time travel)
+- flags suspicious windows by spread %, large trades, and traffic spikes
+- runs an Isolation Forest on cleaned data and compares ML anomalies vs rule-based anomalies
+- generates EDA charts and ML diagnostic charts under `output/`
 
 ## Architecture
 
 ```text
-Binance WebSocket / JSONL replay
-        |
-        v
-Kafka topic: binance.trades
-        |
-        v
-Spark Structured Streaming
-        |
-        v
-Windowed market metrics + anomaly flags
-        |
-        v
-Charts, logs, and downstream analysis
+Coinbase WebSocket  /  synthetic Coinbase data
+              |
+              v
+    data/raw/coinbase_*.jsonl
+              |
+              v
+   replay_coinbase_trades_to_kafka.py
+              |
+              v
+   Kafka topic: coinbase.trades
+              |
+              v
+   Spark Structured Streaming
+   (parse -> clean -> window -> rule flags)
+              |
+              v
+   Delta Lake sink: data/stream/coinbase_aggregates_delta
+              |
+              +--> Spark UI  (port 4040)
+              +--> Kafka UI  (port 8080)
+              +--> read_coinbase_delta_output.py (schema, history, time travel)
+
+   Offline batch path:
+     coinbase_data_cleaning.py -> data/cleaned/coinbase_cleaned_trades_*.csv
+       -> anomaly_detection.py            (rolling z-score per product_id)
+       -> ml_anomaly_detection.py         (IsolationForest + comparison)
 ```
 
 ## Repository Layout
 
 ```text
 producer/
-  binance_collector.py                 Live Binance WebSocket collector
-  generate_sample_data.py              Local Binance-style data generator
+  coinbase_collector.py                     Live Coinbase WebSocket collector
+  generate_coinbase_sample_data.py          Synthetic Coinbase trade generator (with dirty records)
 
 streaming/
-  replay_binance_trades_to_kafka.py    JSONL-to-Kafka replay producer
-  spark_stream_kafka_binance_clean_aggregate.py
+  replay_coinbase_trades_to_kafka.py        JSONL-to-Kafka replay producer
+  spark_stream_kafka_coinbase_clean_aggregate.py
+                                            Spark Structured Streaming job (Delta/CSV/console sinks)
 
 processing/
-  data_cleaning.py                     Batch cleaning
-  anomaly_detection.py                 Offline rolling z-score anomaly scoring
+  coinbase_data_cleaning.py                 Batch cleaning of Coinbase JSONL
+  anomaly_detection.py                      Rule-based per-product rolling z-score
+  ml_anomaly_detection.py                   IsolationForest + rule-vs-ML comparison
+  read_coinbase_delta_output.py             Delta schema, history, time travel
 
 eda/
-  eda_analysis.py                      Charts from cleaned trade files
-  eda_from_stream_aggregates.py        Charts from Spark aggregate output
+  eda_analysis.py                           Charts from cleaned Coinbase data
+  eda_from_stream_aggregates.py             Charts from Spark CSV aggregates
 
 dashboard/
-  index.html                           Browser-based workflow visualizer
+  index.html                                Browser-based pipeline visualizer (simulation)
 
 docs/
-  architecture.md                      Data contract and component overview
-  runbook.md                           Runtime checklist
-  ui_walkthrough.md                    UI guide for Kafka, Spark, and Docker
+  architecture.md                           Component contract and data flow
+  runbook.md                                Operational checklist
+  ui_walkthrough.md                         Kafka UI / Spark UI / dashboard guide
 ```
 
 ## Requirements
@@ -67,16 +85,16 @@ docs/
 
 Install Python dependencies:
 
-```powershell
-py -m pip install -r requirements.txt
+```bash
+python -m pip install -r requirements.txt
 ```
 
-## Run With Docker
+## Quickstart with Docker
 
-Start Kafka, Redpanda Console, and Spark:
+Start Kafka and Kafka UI:
 
-```powershell
-docker compose up -d
+```bash
+docker compose up -d kafka kafka-ui
 ```
 
 Open the UIs:
@@ -86,96 +104,126 @@ Kafka UI: http://localhost:8080
 Spark UI: http://localhost:4040
 ```
 
-Create the Kafka topic if it does not exist:
+Create the Kafka topic:
 
-```powershell
-docker exec crypto-kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --create --if-not-exists --topic binance.trades --partitions 1 --replication-factor 1
+```bash
+docker exec crypto-kafka /opt/kafka/bin/kafka-topics.sh \
+  --bootstrap-server localhost:9092 \
+  --create --if-not-exists \
+  --topic coinbase.trades --partitions 1 --replication-factor 1
 ```
 
-Replay trade data into Kafka:
+Generate Coinbase data (synthetic by default):
 
-```powershell
-py streaming\replay_binance_trades_to_kafka.py --input_dir data\raw --topic binance.trades --bootstrap_servers localhost:9092 --symbols BTCUSDT,ETHUSDT --sleep_mode none --max_events 2000
+```bash
+python producer/generate_coinbase_sample_data.py --num_records 5000
+# or, real Coinbase WebSocket:
+python producer/coinbase_collector.py --duration_seconds 60
 ```
 
-Spark reads from `binance.trades` and prints windowed aggregates from inside the Spark container. Use Spark UI to inspect jobs, stages, executors, and streaming activity.
+Start the Spark streaming job with the Delta Lake sink:
 
-## Run Locally
-
-The local Spark helper sets Java and PySpark paths for Windows:
-
-```powershell
-.\scripts\start_spark_streaming.ps1
+```bash
+docker compose run --rm --service-ports spark-streaming \
+  /opt/spark/bin/spark-submit \
+  --master 'local[*]' \
+  --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,io.delta:delta-spark_2.12:3.1.0 \
+  streaming/spark_stream_kafka_coinbase_clean_aggregate.py \
+  --bootstrap_servers kafka:29092 \
+  --topic coinbase.trades \
+  --delta_path data/stream/coinbase_aggregates_delta \
+  --checkpoint_path data/stream/checkpoints/coinbase_agg \
+  --window_seconds 60 --watermark_seconds 120 \
+  --sink delta
 ```
 
-Docker is still the recommended runtime on Windows because Spark checkpointing is more reliable inside the Linux container.
+Replay records into Kafka:
 
-## Offline Analysis
-
-Run the local batch pipeline:
-
-```powershell
-py run_all.py
+```bash
+python streaming/replay_coinbase_trades_to_kafka.py \
+  --input_dir data/raw \
+  --topic coinbase.trades \
+  --bootstrap_servers localhost:9092 \
+  --product_ids BTC-USD,ETH-USD \
+  --sleep_mode none \
+  --max_events 5000
 ```
 
-This performs cleaning, EDA chart generation, and offline anomaly scoring.
+Verify the Delta table (schema, sample anomalies, history, time travel):
 
-Important outputs:
+```bash
+docker exec crypto-spark-streaming /opt/spark/bin/spark-submit \
+  --packages io.delta:delta-spark_2.12:3.1.0 \
+  processing/read_coinbase_delta_output.py \
+  --delta_path data/stream/coinbase_aggregates_delta
+```
+
+Run the offline batch + ML pipeline:
+
+```bash
+python run_all.py
+```
+
+This runs cleaning, EDA, rule-based anomaly scoring, and Isolation Forest ML.
+
+## Normalized Coinbase Schema
+
+Both the live collector and the synthetic generator emit records in this shape:
+
+| Field | Meaning |
+| --- | --- |
+| `source` | Always `coinbase` |
+| `product_id` | Coinbase product, e.g. `BTC-USD` |
+| `trade_id` | Numeric trade id from Coinbase |
+| `price` | Trade price in USD (string in JSON, cast to double in Spark) |
+| `quantity` | Base asset size (string in JSON, cast to double in Spark) |
+| `trade_time` | ISO-8601 UTC timestamp of the trade |
+| `side` | `buy`, `sell`, or `unknown` |
+| `collected_at` | Local UTC timestamp when the record was captured |
+| `raw_type` | `match` or `last_match` |
+
+## Stream Output
+
+Spark writes one row per product per window:
 
 ```text
-output/
-data/anomalies/latest_trade_anomaly_scores.csv
-```
-
-## Stream Processing
-
-Spark normalizes the Binance fields into a readable schema:
-
-```text
-s -> symbol
-t -> trade_id
-p -> price
-q -> quantity
-T -> trade_time
-```
-
-The streaming job filters invalid records, derives `trade_value`, applies event-time windows, and calculates:
-
-```text
-avg_price
-min_price
-max_price
-price_spread_pct
-volume
-notional_volume
-max_trade_value
-trade_count
-is_anomaly
-anomaly_reason
+window_start  window_end  product_id
+avg_price  min_price  max_price  price_spread_pct
+total_quantity  total_trade_value  max_trade_value  trade_count
+is_anomaly  anomaly_reason
 ```
 
 ## Anomaly Signals
 
-A window is flagged when one or more configured rules trigger:
+Rule-based (in stream and offline):
 
-- price spread exceeds the threshold
-- a single trade has unusually high notional value
-- trade count is above the traffic-spike threshold
+- price spread within the window exceeds `--spread_threshold_pct`
+- a single trade has notional value at or above `--large_trade_value`
+- trade count in the window is at or above `--high_trade_count`
 
-The batch anomaly scorer adds rolling z-score checks per symbol for offline validation.
+`anomaly_reason` concatenates triggered labels (`price_spread`, `large_trade`, `traffic_spike`).
 
-## Visual Workflow
+ML (offline):
 
-Open this file in a browser:
+- Isolation Forest trained on `[price, quantity, trade_value, price_zscore, trade_value_zscore]`
+- contamination = 0.05, 100 estimators, standardized features
+- `coinbase_ml_comparison.png` shows overlap with the rule-based output
+- Feature importance is a correlation proxy (sklearn IsolationForest has no native importances)
 
-```text
-dashboard/index.html
-```
+## Live vs Synthetic Data
 
-It shows the data flow from ingestion to Kafka, Spark processing, and anomaly output. It is a lightweight visualizer for explaining the system without touching the running services.
+- The live Coinbase collector writes real trades to `data/raw/coinbase_trades_*.jsonl`.
+- The synthetic generator writes Coinbase-shape records (with controlled dirty data) to `data/raw/coinbase_synthetic_*.jsonl`.
+- Both file types are picked up by `replay_coinbase_trades_to_kafka.py` and `coinbase_data_cleaning.py` automatically.
 
-## Notes
+For a presentation: be explicit about which one is feeding the demo. Coinbase WebSocket access can be blocked on some networks, so the synthetic generator is a safe fallback.
 
-- The committed data is intentionally small. Longer live collection or larger replay files give better baselines.
-- Binance access can vary by network or region. The replay path keeps the pipeline testable even when live collection is unavailable.
-- For durable storage, switch the Spark sink from console/CSV to Parquet, Delta Lake, or another warehouse-backed target.
+## Team
+
+- (add your team members here, one per line: Name &mdash; role)
+
+## Notes / Limitations
+
+- Demo runs may use synthetic Coinbase-format records when network access to `ws-feed.exchange.coinbase.com` is restricted; live ingestion should be tested before the presentation.
+- Default committed data is small. Run a longer collection or replay if you want richer baselines.
+- For durable storage in production, write the Delta sink to cloud object storage (S3 / ADLS / GCS) and consider scheduling Delta `OPTIMIZE` and `VACUUM`.

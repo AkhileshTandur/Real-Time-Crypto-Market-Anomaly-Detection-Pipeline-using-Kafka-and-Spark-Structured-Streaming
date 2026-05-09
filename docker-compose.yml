@@ -46,22 +46,26 @@ services:
       - --master
       - local[*]
       - --packages
-      - org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0
-      - streaming/spark_stream_kafka_binance_clean_aggregate.py
+      # Kafka connector + Delta Lake. Delta is loaded so the streaming job can
+      # use --sink delta out of the box. Console and CSV runs ignore it.
+      - org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,io.delta:delta-spark_2.12:3.1.0
+      - streaming/spark_stream_kafka_coinbase_clean_aggregate.py
       - --bootstrap_servers
       - kafka:29092
       - --topic
-      - binance.trades
+      - coinbase.trades
       - --out_path
-      - data/stream/aggregates_csv
+      - data/stream/coinbase_aggregates_csv
+      - --delta_path
+      - data/stream/coinbase_aggregates_delta
       - --checkpoint_path
-      - data/stream/checkpoints/agg
+      - data/stream/checkpoints/coinbase_agg
       - --window_seconds
       - "60"
       - --watermark_seconds
       - "120"
       - --sink
-      - console
+      - delta
 
 volumes:
   kafka_data:

@@ -4,15 +4,28 @@ __pycache__/
 venv/
 .env
 
-data/stream/
-data/anomalies/
-data/raw/trades_*.json
-data/cleaned/cleaned_trades_*.csv
-output/*.csv
+# Spark / Delta runtime caches (rebuilt on every run)
+.spark-ivy/
+spark-warehouse/
+derby.log
+metastore_db/
+spark-test-perms/
 
+# OS and editor noise
 *.log
 logs/
-.spark-ivy/
-spark-test-perms/
 .DS_Store
+
+# Old Binance artifacts (kept here as a tripwire so they cannot accidentally
+# come back into the Coinbase pipeline)
+data/raw/trades_*.json
+data/cleaned/cleaned_trades_*.csv
+
+# Keep these for the demo (synthetic Coinbase records, Delta log, anomaly CSVs)
+# data/raw/coinbase_*.jsonl
+# data/cleaned/coinbase_cleaned_trades_*.csv
+# data/anomalies/
+# data/stream/
+
+# Personal/large bundles unrelated to the pipeline
 Group Project Bigdata.pdf

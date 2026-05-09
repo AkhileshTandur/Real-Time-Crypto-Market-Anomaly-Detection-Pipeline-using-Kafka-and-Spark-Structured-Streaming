@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Crypto Streaming Pipeline Demo</title>
+  <title>Coinbase Streaming Pipeline Demo</title>
   <style>
     :root {
       color-scheme: light;
@@ -254,7 +254,7 @@
 </head>
 <body>
   <header>
-    <h1>Real-Time Crypto Market Anomaly Detection</h1>
+    <h1>Real-Time Coinbase Market Anomaly Detection</h1>
     <div class="controls">
       <button class="primary" id="toggleBtn">Pause Stream</button>
       <button id="shockBtn">Inject Market Shock</button>
@@ -263,30 +263,38 @@
   </header>
 
   <main>
+    <section class="panel" aria-label="Demo caveat">
+      <p style="margin:0;color:var(--muted);font-size:13px;">
+        This dashboard is a visual simulation of the Coinbase &rarr; Kafka &rarr; Spark &rarr; Delta Lake pipeline.
+        Live processing is demonstrated through Kafka UI (<code>:8080</code>), Spark UI (<code>:4040</code>),
+        and the Delta Lake transaction log.
+      </p>
+    </section>
+
     <section class="pipeline" aria-label="Pipeline stages">
       <article class="stage">
-        <h2>1. Binance WebSocket</h2>
-        <p>Live BTCUSDT and ETHUSDT trade ticks arrive continuously.</p>
+        <h2>1. Coinbase WebSocket</h2>
+        <p>Live BTC-USD and ETH-USD match events arrive from Coinbase Exchange.</p>
         <div class="counter" id="sourceCount">0</div>
       </article>
       <article class="stage">
         <h2>2. Raw JSONL</h2>
-        <p>Events are persisted so runs can be replayed and audited.</p>
+        <p>Normalized records are persisted so runs can be replayed and audited.</p>
         <div class="counter" id="rawCount">0</div>
       </article>
       <article class="stage">
         <h2>3. Kafka Topic</h2>
-        <p>Kafka buffers high-velocity trades for Spark consumers.</p>
+        <p>Kafka topic <code>coinbase.trades</code> buffers high-velocity events for Spark.</p>
         <div class="counter" id="kafkaCount">0</div>
       </article>
       <article class="stage">
         <h2>4. Spark Streaming</h2>
-        <p>Spark cleans, windows, aggregates, and computes features.</p>
+        <p>Spark cleans, windows, aggregates, and computes anomaly features.</p>
         <div class="counter" id="sparkCount">0</div>
       </article>
       <article class="stage">
-        <h2>5. Anomaly Output</h2>
-        <p>Suspicious windows are flagged for analysis and alerting.</p>
+        <h2>5. Delta Lake + Anomalies</h2>
+        <p>ACID Delta commits land windowed aggregates; suspicious windows are flagged.</p>
         <div class="counter" id="anomalyCount">0</div>
       </article>
     </section>
@@ -322,8 +330,8 @@
       <table>
         <thead>
           <tr>
-            <th>Symbol</th>
-            <th>Avg Price</th>
+            <th>Product</th>
+            <th>Avg Price (USD)</th>
             <th>Volume</th>
             <th>Trade Count</th>
             <th>Spread %</th>
@@ -347,7 +355,7 @@
       anomalies: 0,
       queue: [],
       windows: [],
-      prices: { BTCUSDT: 97000, ETHUSDT: 3500 },
+      prices: { "BTC-USD": 97000, "ETH-USD": 3500 },
       aggregates: new Map()
     };
 
@@ -366,18 +374,19 @@
       while (el("log").children.length > 80) el("log").lastChild.remove();
     }
 
-    function randomTrade(symbol) {
-      const baseMove = symbol === "BTCUSDT" ? 45 : 3;
-      const shockMove = state.shock > 0 ? (symbol === "BTCUSDT" ? 1400 : 80) : 0;
+    function randomTrade(productId) {
+      const isBtc = productId === "BTC-USD";
+      const baseMove = isBtc ? 45 : 3;
+      const shockMove = state.shock > 0 ? (isBtc ? 1400 : 80) : 0;
       const direction = Math.random() > 0.48 ? 1 : -1;
-      state.prices[symbol] += direction * (Math.random() * baseMove + Math.random() * shockMove);
-      state.prices[symbol] = Math.max(state.prices[symbol], symbol === "BTCUSDT" ? 1000 : 100);
-      const quantity = symbol === "BTCUSDT" ? Math.random() * 2.4 : Math.random() * 28;
+      state.prices[productId] += direction * (Math.random() * baseMove + Math.random() * shockMove);
+      state.prices[productId] = Math.max(state.prices[productId], isBtc ? 1000 : 100);
+      const quantity = isBtc ? Math.random() * 2.4 : Math.random() * 28;
       return {
-        symbol,
-        price: state.prices[symbol],
+        productId,
+        price: state.prices[productId],
         quantity,
-        tradeValue: state.prices[symbol] * quantity,
+        tradeValue: state.prices[productId] * quantity,
         time: Date.now()
       };
     }
@@ -385,7 +394,7 @@
     function ingest() {
       const burst = state.shock > 0 ? 18 : 7;
       for (let i = 0; i < burst; i++) {
-        const trade = randomTrade(Math.random() > 0.5 ? "BTCUSDT" : "ETHUSDT");
+        const trade = randomTrade(Math.random() > 0.5 ? "BTC-USD" : "ETH-USD");
         state.source++;
         state.raw++;
         state.kafka++;
@@ -401,12 +410,12 @@
 
       const grouped = new Map();
       for (const trade of batch) {
-        if (!trade.symbol || trade.price <= 0 || trade.quantity <= 0) continue;
-        if (!grouped.has(trade.symbol)) grouped.set(trade.symbol, []);
-        grouped.get(trade.symbol).push(trade);
+        if (!trade.productId || trade.price <= 0 || trade.quantity <= 0) continue;
+        if (!grouped.has(trade.productId)) grouped.set(trade.productId, []);
+        grouped.get(trade.productId).push(trade);
       }
 
-      for (const [symbol, trades] of grouped) {
+      for (const [productId, trades] of grouped) {
         const prices = trades.map(t => t.price);
         const volume = trades.reduce((sum, t) => sum + t.quantity, 0);
         const maxTradeValue = Math.max(...trades.map(t => t.tradeValue));
@@ -415,14 +424,14 @@
         const maxPrice = Math.max(...prices);
         const spreadPct = ((maxPrice - minPrice) / avgPrice) * 100;
         const isAnomaly = spreadPct > 1 || maxTradeValue > 100000 || trades.length > 16;
-        const aggregate = { symbol, avgPrice, volume, tradeCount: trades.length, spreadPct, isAnomaly };
-        state.aggregates.set(symbol, aggregate);
-        state.windows.push({ symbol, avgPrice, isAnomaly });
+        const aggregate = { productId, avgPrice, volume, tradeCount: trades.length, spreadPct, isAnomaly };
+        state.aggregates.set(productId, aggregate);
+        state.windows.push({ productId, avgPrice, isAnomaly });
         if (isAnomaly) {
           state.anomalies++;
-          log(`ANOMALY ${symbol}: spread=${spreadPct.toFixed(2)}%, max trade value=${money(maxTradeValue)}`);
+          log(`ANOMALY ${productId}: spread=${spreadPct.toFixed(2)}%, max trade value=${money(maxTradeValue)}`);
         } else {
-          log(`Spark window ${symbol}: ${trades.length} trades cleaned and aggregated`);
+          log(`Spark window ${productId}: ${trades.length} trades cleaned and aggregated`);
         }
       }
 
@@ -440,8 +449,8 @@
         ctx.stroke();
       }
 
-      const btc = state.windows.filter(w => w.symbol === "BTCUSDT").slice(-35);
-      const eth = state.windows.filter(w => w.symbol === "ETHUSDT").slice(-35);
+      const btc = state.windows.filter(w => w.productId === "BTC-USD").slice(-35);
+      const eth = state.windows.filter(w => w.productId === "ETH-USD").slice(-35);
       drawSeries(btc, "#2563eb", 90000, 104000);
       drawSeries(eth, "#12805c", 3000, 4200);
     }
@@ -473,7 +482,7 @@
     function renderAggregates() {
       const rows = [...state.aggregates.values()].map(row => `
         <tr>
-          <td>${row.symbol}</td>
+          <td>${row.productId}</td>
           <td>${money(row.avgPrice)}</td>
           <td>${row.volume.toFixed(4)}</td>
           <td>${row.tradeCount}</td>
@@ -528,7 +537,7 @@
         anomalies: 0,
         queue: [],
         windows: [],
-        prices: { BTCUSDT: 97000, ETHUSDT: 3500 },
+        prices: { "BTC-USD": 97000, "ETH-USD": 3500 },
         aggregates: new Map()
       });
       el("toggleBtn").textContent = "Pause Stream";
@@ -536,7 +545,7 @@
       render();
     });
 
-    log("Visual demo started");
+    log("Coinbase visual demo started");
     setInterval(loop, 800);
     render();
   </script>
